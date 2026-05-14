@@ -1,0 +1,1098 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>findr.</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎬</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Raleway:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-primary: #0a0a0b;
+  --bg-secondary: #141416;
+  --bg-card: #1a1a1d;
+  --bg-overlay: rgba(10,10,11,0.85);
+  --text-primary: #e8e8e4;
+  --text-muted: #8a8a82;
+  --text-dim: #4a4a44;
+  --accent: #c8a96e;
+  --accent-soft: rgba(200,169,110,0.15);
+  --border: rgba(255,255,255,0.06);
+  --reel-h: 100dvh;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html, body { width:100%; height:100%; overflow:hidden; background:var(--bg-primary); color:var(--text-primary); font-family:'Raleway',sans-serif; }
+
+/* ── SCREENS ── */
+.screen { position:fixed; inset:0; transition:transform 0.5s cubic-bezier(0.4,0,0.2,1), opacity 0.5s ease; z-index:1; }
+.screen.hidden { pointer-events:none; opacity:0; }
+#screen-reel { transform:translateX(0); }
+#screen-reel.hidden { transform:translateX(0); opacity:0; }
+#screen-details { transform:translateX(100%); opacity:1; }
+#screen-details.active { transform:translateX(0); opacity:1; }
+#screen-watchlater { transform:translateX(-100%); opacity:1; }
+#screen-watchlater.active { transform:translateX(0); opacity:1; }
+
+/* ── TOP BAR ── */
+.topbar {
+  position:fixed; top:0; left:0; right:0; z-index:100;
+  padding:20px 24px 16px;
+  display:flex; align-items:center; justify-content:space-between;
+  background:linear-gradient(to bottom, rgba(10,10,11,0.95) 0%, transparent 100%);
+  pointer-events:none;
+}
+.topbar-logo {
+  font-size:1.4rem; font-weight:700; letter-spacing:0.08em;
+  color:var(--text-primary); pointer-events:all;
+}
+.topbar-logo span { color:var(--accent); }
+.topbar-actions { display:flex; gap:16px; pointer-events:all; }
+.topbar-btn {
+  background:none; border:none; cursor:pointer; color:var(--text-muted);
+  font-family:'Raleway',sans-serif; font-size:0.7rem; letter-spacing:0.12em;
+  text-transform:uppercase; font-weight:600; transition:color 0.2s;
+  display:flex; align-items:center; gap:6px;
+}
+.topbar-btn:hover { color:var(--text-primary); }
+.topbar-btn svg { width:15px; height:15px; }
+
+/* ── REEL FEED ── */
+#reel-container {
+  width:100%; height:100%; overflow:hidden; position:relative;
+  touch-action:pan-y;
+}
+.reel-track {
+  display:flex; flex-direction:column;
+  transition:transform 0.45s cubic-bezier(0.4,0,0.2,1);
+  will-change:transform;
+}
+.reel {
+  width:100%; height:var(--reel-h); position:relative;
+  flex-shrink:0; overflow:hidden; background:#000;
+}
+.reel-bg {
+  position:absolute; inset:0; width:100%; height:100%;
+  object-fit:cover; transition:opacity 0.3s;
+}
+.reel-iframe-wrap {
+  position:absolute; inset:0; pointer-events:none;
+  overflow:hidden;
+}
+.reel-iframe-wrap iframe {
+  position:absolute;
+  top:50%; left:50%;
+  width:177.78vh; height:100vh;
+  min-width:100%; min-height:56.25vw;
+  transform:translate(-50%,-50%);
+  border:none; pointer-events:none;
+}
+.reel-overlay {
+  position:absolute; inset:0;
+  background:linear-gradient(
+    to bottom,
+    rgba(10,10,11,0.25) 0%,
+    transparent 30%,
+    transparent 55%,
+    rgba(10,10,11,0.5) 80%,
+    rgba(10,10,11,0.85) 100%
+  );
+  pointer-events:none;
+}
+.reel-meta {
+  position:absolute; bottom:80px; left:24px; right:72px;
+  pointer-events:none;
+}
+.reel-title {
+  font-size:clamp(1.4rem,5vw,2.2rem); font-weight:700;
+  letter-spacing:-0.01em; line-height:1.1;
+  text-shadow:0 2px 20px rgba(0,0,0,0.6);
+  margin-bottom:6px;
+}
+.reel-year {
+  font-size:0.75rem; font-weight:300; letter-spacing:0.15em;
+  color:var(--text-muted); text-transform:uppercase;
+}
+.reel-bookmark {
+  position:absolute; bottom:80px; right:20px;
+  background:none; border:none; cursor:pointer;
+  color:var(--text-primary); transition:transform 0.2s, color 0.2s;
+}
+.reel-bookmark svg { width:26px; height:26px; filter:drop-shadow(0 2px 8px rgba(0,0,0,0.5)); }
+.reel-bookmark.saved svg { fill:var(--accent); stroke:var(--accent); }
+.reel-bookmark:active { transform:scale(1.25); }
+
+.reel-tap-zone {
+  position:absolute; inset:0; z-index:5; cursor:pointer;
+}
+.reel-progress {
+  position:absolute; bottom:0; left:0; height:2px;
+  background:var(--accent); transition:width 0.3s linear;
+  opacity:0.7;
+}
+
+/* swipe hint */
+.swipe-hint {
+  position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+  font-size:0.62rem; letter-spacing:0.2em; color:var(--text-dim);
+  text-transform:uppercase; z-index:50; pointer-events:none;
+  animation:fadeHint 4s ease forwards;
+}
+@keyframes fadeHint { 0%{opacity:0} 20%{opacity:1} 70%{opacity:1} 100%{opacity:0} }
+
+/* ── SEARCH BAR ── */
+.search-wrap {
+  position:fixed; top:0; left:0; right:0; z-index:200;
+  padding:16px 20px;
+  background:rgba(10,10,11,0.98);
+  backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--border);
+  transform:translateY(-100%); transition:transform 0.35s cubic-bezier(0.4,0,0.2,1);
+}
+.search-wrap.open { transform:translateY(0); }
+.search-row { display:flex; gap:10px; align-items:center; }
+.search-input {
+  flex:1; background:var(--bg-card); border:1px solid var(--border);
+  color:var(--text-primary); font-family:'Raleway',sans-serif;
+  font-size:0.9rem; font-weight:400; padding:10px 16px;
+  border-radius:4px; outline:none; letter-spacing:0.02em;
+  transition:border-color 0.2s;
+}
+.search-input:focus { border-color:rgba(200,169,110,0.4); }
+.search-input::placeholder { color:var(--text-dim); }
+.search-close {
+  background:none; border:none; cursor:pointer; color:var(--text-muted);
+  font-family:'Raleway',sans-serif; font-size:0.7rem; letter-spacing:0.1em;
+  text-transform:uppercase; font-weight:600; padding:10px;
+}
+.filters-row {
+  display:flex; gap:8px; margin-top:12px; overflow-x:auto; padding-bottom:4px;
+  scrollbar-width:none;
+}
+.filters-row::-webkit-scrollbar { display:none; }
+.filter-chip {
+  flex-shrink:0; padding:5px 12px; border-radius:2px;
+  border:1px solid var(--border); background:transparent;
+  color:var(--text-muted); font-family:'Raleway',sans-serif;
+  font-size:0.65rem; letter-spacing:0.12em; text-transform:uppercase;
+  cursor:pointer; transition:all 0.2s; font-weight:600;
+}
+.filter-chip.active { border-color:var(--accent); color:var(--accent); background:var(--accent-soft); }
+.search-results {
+  max-height:50vh; overflow-y:auto; margin-top:12px;
+  scrollbar-width:none;
+}
+.search-results::-webkit-scrollbar { display:none; }
+.search-result-item {
+  display:flex; gap:12px; align-items:center; padding:10px 0;
+  border-bottom:1px solid var(--border); cursor:pointer;
+  transition:opacity 0.2s;
+}
+.search-result-item:hover { opacity:0.75; }
+.search-result-poster {
+  width:36px; height:54px; object-fit:cover; border-radius:2px;
+  background:var(--bg-card); flex-shrink:0;
+}
+.search-result-info {}
+.search-result-title { font-size:0.85rem; font-weight:500; }
+.search-result-meta { font-size:0.65rem; color:var(--text-muted); letter-spacing:0.1em; text-transform:uppercase; margin-top:3px; }
+
+/* ── DETAILS PAGE ── */
+#screen-details {
+  background:var(--bg-primary);
+  overflow-y:auto; overflow-x:hidden;
+  scrollbar-width:none;
+}
+#screen-details::-webkit-scrollbar { display:none; }
+.details-back {
+  position:fixed; top:20px; left:20px; z-index:300;
+  background:rgba(10,10,11,0.7); border:1px solid var(--border);
+  backdrop-filter:blur(10px); border-radius:50%;
+  width:40px; height:40px; display:flex; align-items:center; justify-content:center;
+  cursor:pointer; color:var(--text-primary); transition:opacity 0.2s;
+}
+.details-back:hover { opacity:0.7; }
+.details-hero {
+  position:relative; width:100%; height:65vmax; max-height:520px; min-height:300px;
+  overflow:hidden;
+}
+.details-backdrop {
+  position:absolute; inset:0; width:100%; height:100%;
+  object-fit:cover;
+}
+.details-hero-overlay {
+  position:absolute; inset:0;
+  background:linear-gradient(to bottom, transparent 30%, var(--bg-primary) 100%);
+}
+.details-hero-content {
+  position:absolute; bottom:0; left:0; right:0; padding:24px 24px 0;
+  display:flex; gap:16px; align-items:flex-end;
+}
+.details-poster {
+  width:90px; flex-shrink:0; border-radius:3px;
+  box-shadow:0 8px 32px rgba(0,0,0,0.6);
+  aspect-ratio:2/3; object-fit:cover;
+}
+.details-title-block { flex:1; min-width:0; padding-bottom:8px; }
+.details-title {
+  font-size:clamp(1.3rem,5vw,2rem); font-weight:700;
+  line-height:1.1; letter-spacing:-0.01em;
+}
+.details-tagline {
+  font-size:0.75rem; font-weight:300; color:var(--text-muted);
+  font-style:italic; margin-top:6px; letter-spacing:0.04em;
+  font-family:Georgia,serif;
+}
+.details-badges {
+  display:flex; flex-wrap:wrap; gap:6px; margin-top:10px;
+}
+.badge {
+  font-size:0.6rem; letter-spacing:0.14em; text-transform:uppercase; font-weight:600;
+  padding:3px 8px; border:1px solid var(--border); color:var(--text-muted);
+  border-radius:2px;
+}
+.badge.status-theatres { border-color:rgba(200,169,110,0.5); color:var(--accent); background:var(--accent-soft); }
+.badge.status-streaming { border-color:rgba(100,200,120,0.4); color:#78c87a; background:rgba(100,200,120,0.08); }
+.badge.status-upcoming { border-color:rgba(150,150,255,0.4); color:#a0a0ff; background:rgba(150,150,255,0.08); }
+
+.details-body { padding:20px 24px 80px; }
+.section-label {
+  font-size:0.6rem; letter-spacing:0.22em; text-transform:uppercase;
+  color:var(--text-dim); font-weight:700; margin-bottom:14px;
+  padding-bottom:8px; border-bottom:1px solid var(--border);
+}
+.details-section { margin-bottom:32px; }
+
+.release-block {
+  background:var(--bg-card); border:1px solid var(--border);
+  border-radius:4px; padding:14px 16px; margin-bottom:32px;
+}
+.release-block-title { font-size:0.65rem; letter-spacing:0.15em; text-transform:uppercase; color:var(--text-dim); font-weight:600; margin-bottom:8px; }
+.release-item { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+.release-item:last-child { margin-bottom:0; }
+.release-dot { width:6px; height:6px; border-radius:50%; background:var(--accent); flex-shrink:0; }
+.release-text { font-size:0.8rem; color:var(--text-primary); font-weight:400; }
+.release-sub { font-size:0.7rem; color:var(--text-muted); margin-top:1px; }
+
+.synopsis {
+  font-size:0.9rem; line-height:1.75; color:rgba(232,232,228,0.85);
+  font-family:Georgia,serif; font-weight:400; letter-spacing:0.01em;
+}
+
+/* Cast */
+.cast-scroll { display:flex; gap:12px; overflow-x:auto; padding-bottom:8px; scrollbar-width:none; margin:0 -24px; padding:0 24px 8px; }
+.cast-scroll::-webkit-scrollbar { display:none; }
+.cast-card { flex-shrink:0; width:80px; cursor:pointer; }
+.cast-img {
+  width:80px; height:80px; border-radius:50%; object-fit:cover;
+  background:var(--bg-card); border:1px solid var(--border);
+  display:block; margin-bottom:8px;
+}
+.cast-name { font-size:0.65rem; font-weight:600; text-align:center; line-height:1.3; }
+.cast-role { font-size:0.6rem; color:var(--text-muted); text-align:center; margin-top:2px; }
+
+/* Crew */
+.crew-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.crew-item {}
+.crew-role { font-size:0.6rem; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-dim); font-weight:600; margin-bottom:3px; }
+.crew-name { font-size:0.82rem; font-weight:500; }
+
+/* Media / trailers */
+.media-scroll { display:flex; gap:10px; overflow-x:auto; padding-bottom:8px; scrollbar-width:none; margin:0 -24px; padding:0 24px 8px; }
+.media-scroll::-webkit-scrollbar { display:none; }
+.media-thumb {
+  flex-shrink:0; width:180px; position:relative; cursor:pointer;
+  border-radius:3px; overflow:hidden; background:var(--bg-card);
+}
+.media-thumb img { width:100%; height:100px; object-fit:cover; display:block; }
+.media-play {
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  background:rgba(0,0,0,0.35);
+}
+.media-play svg { width:36px; height:36px; color:#fff; opacity:0.85; }
+.media-label { font-size:0.65rem; padding:6px 8px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* Similar */
+.similar-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+.similar-card { cursor:pointer; }
+.similar-poster { width:100%; aspect-ratio:2/3; object-fit:cover; border-radius:3px; background:var(--bg-card); display:block; }
+.similar-title { font-size:0.65rem; margin-top:5px; font-weight:500; line-height:1.3; }
+.similar-year { font-size:0.6rem; color:var(--text-muted); }
+
+/* ── WATCH LATER ── */
+#screen-watchlater {
+  background:var(--bg-primary);
+  overflow-y:auto; scrollbar-width:none;
+}
+#screen-watchlater::-webkit-scrollbar { display:none; }
+.wl-header {
+  padding:72px 24px 20px;
+}
+.wl-title { font-size:1.5rem; font-weight:700; letter-spacing:-0.01em; }
+.wl-count { font-size:0.7rem; color:var(--text-muted); letter-spacing:0.12em; text-transform:uppercase; margin-top:4px; font-weight:600; }
+.wl-back {
+  position:fixed; top:20px; right:20px; z-index:300;
+  background:rgba(10,10,11,0.7); border:1px solid var(--border);
+  backdrop-filter:blur(10px); border-radius:50%;
+  width:40px; height:40px; display:flex; align-items:center; justify-content:center;
+  cursor:pointer; color:var(--text-primary); transition:opacity 0.2s;
+}
+.wl-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; padding:0 20px 80px; }
+.wl-card { cursor:pointer; position:relative; }
+.wl-poster { width:100%; aspect-ratio:2/3; object-fit:cover; border-radius:3px; background:var(--bg-card); display:block; }
+.wl-card-info { padding:8px 0; }
+.wl-card-title { font-size:0.8rem; font-weight:600; line-height:1.3; }
+.wl-card-meta { font-size:0.65rem; color:var(--text-muted); margin-top:3px; }
+.wl-card-remove {
+  position:absolute; top:6px; right:6px;
+  width:28px; height:28px; border-radius:50%;
+  background:rgba(10,10,11,0.75); backdrop-filter:blur(8px);
+  border:1px solid var(--border); display:flex; align-items:center; justify-content:center;
+  cursor:pointer; color:var(--text-muted);
+}
+.wl-card-remove svg { width:13px; height:13px; }
+.wl-empty {
+  text-align:center; padding:80px 40px;
+  color:var(--text-dim); font-size:0.85rem; line-height:1.8;
+  letter-spacing:0.04em;
+}
+.wl-empty-icon { font-size:2.5rem; margin-bottom:16px; opacity:0.3; }
+
+/* ── TOAST ── */
+.toast {
+  position:fixed; bottom:40px; left:50%; transform:translateX(-50%) translateY(20px);
+  background:rgba(25,25,28,0.95); backdrop-filter:blur(16px);
+  border:1px solid var(--border); border-radius:4px;
+  padding:10px 18px; font-size:0.72rem; letter-spacing:0.1em;
+  text-transform:uppercase; font-weight:600; color:var(--text-primary);
+  z-index:500; opacity:0; transition:opacity 0.3s, transform 0.3s;
+  pointer-events:none; white-space:nowrap;
+}
+.toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+/* ── VIDEO MODAL ── */
+.video-modal {
+  position:fixed; inset:0; z-index:600;
+  background:rgba(0,0,0,0.92); display:flex;
+  align-items:center; justify-content:center;
+  opacity:0; pointer-events:none; transition:opacity 0.3s;
+}
+.video-modal.open { opacity:1; pointer-events:all; }
+.video-modal-inner { width:90%; max-width:720px; position:relative; }
+.video-modal-iframe {
+  width:100%; aspect-ratio:16/9; border:none; border-radius:3px;
+}
+.video-modal-close {
+  position:absolute; top:-44px; right:0;
+  background:none; border:none; cursor:pointer; color:#fff;
+  font-size:0.75rem; letter-spacing:0.12em; text-transform:uppercase;
+  font-family:'Raleway',sans-serif; font-weight:600;
+}
+
+/* ── LOADING ── */
+.loading-bar {
+  position:fixed; top:0; left:0; height:2px;
+  background:var(--accent); z-index:1000;
+  transition:width 0.3s, opacity 0.5s;
+  box-shadow:0 0 8px var(--accent);
+}
+
+/* ── SCROLL INDICATOR ── */
+.scroll-indicators {
+  position:fixed; right:12px; top:50%; transform:translateY(-50%);
+  display:flex; flex-direction:column; gap:4px; z-index:50;
+  pointer-events:none;
+}
+.scroll-dot {
+  width:4px; height:4px; border-radius:50%;
+  background:var(--text-dim); transition:all 0.3s;
+}
+.scroll-dot.active { background:var(--accent); height:16px; border-radius:2px; }
+
+@media (min-width:600px) {
+  #reel-container { max-width:420px; margin:0 auto; }
+  .scroll-indicators { right:calc(50% - 220px); }
+}
+</style>
+</head>
+<body>
+
+<!-- Loading bar -->
+<div class="loading-bar" id="loadingBar" style="width:0;opacity:1"></div>
+
+<!-- Top Bar -->
+<div class="topbar" id="topbar">
+  <div class="topbar-logo">findr<span>.</span></div>
+  <div class="topbar-actions">
+    <button class="topbar-btn" onclick="openSearch()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- Search Overlay -->
+<div class="search-wrap" id="searchWrap">
+  <div class="search-row">
+    <input class="search-input" id="searchInput" placeholder="Search titles, actors, directors…" oninput="handleSearch()" />
+    <button class="search-close" onclick="closeSearch()">Close</button>
+  </div>
+  <div class="filters-row" id="filtersRow">
+    <button class="filter-chip active" data-filter="all" onclick="setFilter(this,'all')">All</button>
+    <button class="filter-chip" data-filter="movie" onclick="setFilter(this,'movie')">Movies</button>
+    <button class="filter-chip" data-filter="tv" onclick="setFilter(this,'tv')">Series</button>
+    <button class="filter-chip" data-filter="trending" onclick="setFilter(this,'trending')">Trending</button>
+    <button class="filter-chip" data-filter="theatre" onclick="setFilter(this,'theatre')">In Theatres</button>
+    <button class="filter-chip" data-filter="streaming" onclick="setFilter(this,'streaming')">Streaming</button>
+  </div>
+  <div class="search-results" id="searchResults"></div>
+</div>
+
+<!-- REEL SCREEN -->
+<div class="screen" id="screen-reel">
+  <div id="reel-container">
+    <div class="reel-track" id="reelTrack"></div>
+    <div class="scroll-indicators" id="scrollDots"></div>
+  </div>
+</div>
+
+<!-- DETAILS SCREEN -->
+<div class="screen hidden" id="screen-details">
+  <button class="details-back" onclick="closeDetails()">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+  </button>
+  <div id="detailsContent"></div>
+</div>
+
+<!-- WATCH LATER SCREEN -->
+<div class="screen hidden" id="screen-watchlater">
+  <button class="wl-back" onclick="closeWatchLater()">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 19l7-7-7-7"/></svg>
+  </button>
+  <div class="wl-header">
+    <div class="wl-title">Watch Later</div>
+    <div class="wl-count" id="wlCount">0 titles saved</div>
+  </div>
+  <div class="wl-grid" id="wlGrid"></div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Video Modal -->
+<div class="video-modal" id="videoModal" onclick="closeVideoModal(event)">
+  <div class="video-modal-inner">
+    <button class="video-modal-close" onclick="closeVideoModal()">✕ Close</button>
+    <iframe class="video-modal-iframe" id="videoModalIframe" allowfullscreen></iframe>
+  </div>
+</div>
+
+<script>
+// ── CONFIG ──────────────────────────────────────────────────
+const TMDB_KEY = ''; // User can add their own TMDB API key
+const TMDB_BASE = 'https://api.themoviedb.org/3';
+const IMG_BASE = 'https://image.tmdb.org/t/p/';
+
+// ── STATE ──────────────────────────────────────────────────
+let reels = [];
+let currentReel = 0;
+let watchLater = JSON.parse(localStorage.getItem('findr_watchlater') || '[]');
+let currentFilter = 'all';
+let touchStartX = 0, touchStartY = 0;
+let isTransitioning = false;
+let currentDetails = null;
+let activeScreen = 'reel'; // 'reel' | 'details' | 'watchlater'
+
+// ── SAMPLE DATA (shown when no API key) ─────────────────────
+const SAMPLE_MOVIES = [
+  {
+    id: 1, title: "Dune: Part Two", year: 2024,
+    overview: "Paul Atreides unites with Chani and the Fremen while seeking revenge against the conspirators who destroyed his family. Facing a choice between the love of his life and the fate of the known universe, he endeavours to prevent a terrible future only he can foresee.",
+    tagline: "Long live the fighters.",
+    backdrop: "https://image.tmdb.org/t/p/w1280/xOMo8BRK7PfcJv9JCnx7s5hj0PX.jpg",
+    poster: "https://image.tmdb.org/t/p/w500/8b8R8l88Qje9dn9OE8PY05Nxl1X.jpg",
+    trailer_key: "Way9Dexny3w",
+    runtime: 166, language: "English", country: "USA",
+    genres: ["Sci-Fi","Adventure","Drama"],
+    status: { type: "streaming", platform: "Max", date: "Mar 21, 2024" },
+    cast: [
+      { name:"Timothée Chalamet", role:"Paul Atreides", img:"https://image.tmdb.org/t/p/w185/BE2sdjpgsa2rNTFa66f7upkaOP.jpg" },
+      { name:"Zendaya", role:"Chani", img:"https://image.tmdb.org/t/p/w185/6TE2AlOUqYmsezwMxiOYjJJuDFe.jpg" },
+      { name:"Rebecca Ferguson", role:"Lady Jessica", img:"https://image.tmdb.org/t/p/w185/lJloTOheuQSirSLXNA3JHsrMNfH.jpg" },
+      { name:"Austin Butler", role:"Feyd-Rautha", img:"https://image.tmdb.org/t/p/w185/dlFSn6nJOtG0hB9RzV9T8UO2GfJ.jpg" },
+    ],
+    crew: { director:"Denis Villeneuve", writer:"Denis Villeneuve", producer:"Mary Parent", composer:"Hans Zimmer", dop:"Greig Fraser" },
+    videos: [
+      { key:"Way9Dexny3w", name:"Official Trailer 2", thumb:`https://i.ytimg.com/vi/Way9Dexny3w/mqdefault.jpg` },
+      { key:"U2Qp3pL3ovs", name:"Teaser Trailer", thumb:`https://i.ytimg.com/vi/U2Qp3pL3ovs/mqdefault.jpg` },
+    ],
+    similar: [
+      { id:2, title:"Oppenheimer", year:2023, poster:"https://image.tmdb.org/t/p/w185/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg" },
+      { id:3, title:"Interstellar", year:2014, poster:"https://image.tmdb.org/t/p/w185/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg" },
+      { id:4, title:"Arrival", year:2016, poster:"https://image.tmdb.org/t/p/w185/x2FJsf1ElAgr63Y3PNPtJrcmpoe.jpg" },
+    ]
+  },
+  {
+    id: 2, title: "Oppenheimer", year: 2023,
+    overview: "The story of J. Robert Oppenheimer's role in the development of the atomic bomb during World War II, and his complex legacy in the modern world.",
+    tagline: "The world forever changes.",
+    backdrop: "https://image.tmdb.org/t/p/w1280/rLb2cwF3Pazuxaj0sRXQ037tGI1.jpg",
+    poster: "https://image.tmdb.org/t/p/w500/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg",
+    trailer_key: "uYPbbksJxIY",
+    runtime: 180, language: "English", country: "USA",
+    genres: ["Biography","Drama","History"],
+    status: { type: "streaming", platform: "Peacock", date: "Aug 2023" },
+    cast: [
+      { name:"Cillian Murphy", role:"J. Robert Oppenheimer", img:"https://image.tmdb.org/t/p/w185/9nHIfvLcPnVl41C1OQBPJHKBFMG.jpg" },
+      { name:"Emily Blunt", role:"Katherine Oppenheimer", img:"https://image.tmdb.org/t/p/w185/5l3Fn1GHhHdKaWLNEPJqB7dZGnE.jpg" },
+      { name:"Matt Damon", role:"Leslie Groves", img:"https://image.tmdb.org/t/p/w185/m0sRVBDW1g83WpNyGBYrFpJ8JVM.jpg" },
+      { name:"Robert Downey Jr.", role:"Lewis Strauss", img:"https://image.tmdb.org/t/p/w185/5qHNjhtjMD4YWH3UP0rm4tKwxCL.jpg" },
+    ],
+    crew: { director:"Christopher Nolan", writer:"Christopher Nolan", producer:"Emma Thomas", composer:"Ludwig Göransson", dop:"Hoyte van Hoytema" },
+    videos: [
+      { key:"uYPbbksJxIY", name:"Official Trailer", thumb:`https://i.ytimg.com/vi/uYPbbksJxIY/mqdefault.jpg` },
+    ],
+    similar: [
+      { id:1, title:"Dune: Part Two", year:2024, poster:"https://image.tmdb.org/t/p/w185/8b8R8l88Qje9dn9OE8PY05Nxl1X.jpg" },
+      { id:5, title:"Tenet", year:2020, poster:"https://image.tmdb.org/t/p/w185/k68nPLbIST6NP96JmTxmZijChyn.jpg" },
+      { id:6, title:"1917", year:2019, poster:"https://image.tmdb.org/t/p/w185/iZf0KyrE25z1sage4SYFLCCrMi9.jpg" },
+    ]
+  },
+  {
+    id: 3, title: "The Last of Us", year: 2023,
+    overview: "After a global pandemic destroys civilization, a hardened survivor takes charge of a 14-year-old girl who may be humanity's last hope. A live-action adaptation of the acclaimed video game.",
+    tagline: "When you're lost in the darkness, look for the light.",
+    backdrop: "https://image.tmdb.org/t/p/w1280/uDgy6hyPd82kOHh6I95yvgxSbac.jpg",
+    poster: "https://image.tmdb.org/t/p/w500/uKvVjHNqB5VmOrdxqAt2F7J78ED.jpg",
+    trailer_key: "uLtkt8BonKM",
+    runtime: 60, language: "English", country: "USA",
+    genres: ["Drama","Thriller","Sci-Fi"],
+    status: { type: "streaming", platform: "HBO", date: "Jan 15, 2023" },
+    cast: [
+      { name:"Pedro Pascal", role:"Joel Miller", img:"https://image.tmdb.org/t/p/w185/6t1N9j3b67TiofGGzJxnOFdFGkQ.jpg" },
+      { name:"Bella Ramsey", role:"Ellie Williams", img:"https://image.tmdb.org/t/p/w185/oyBEDK3XLbAMkPNO5YhvfHhMFAT.jpg" },
+    ],
+    crew: { director:"Craig Mazin", writer:"Neil Druckmann", producer:"Carolyn Strauss", composer:"Gustavo Santaolalla", dop:"Ksenia Sereda" },
+    videos: [
+      { key:"uLtkt8BonKM", name:"Official Trailer", thumb:`https://i.ytimg.com/vi/uLtkt8BonKM/mqdefault.jpg` },
+    ],
+    similar: [
+      { id:7, title:"Station Eleven", year:2021, poster:"https://image.tmdb.org/t/p/w185/4bsj8bwHlL7rVBVtakqhMZRaLyc.jpg" },
+      { id:8, title:"The Walking Dead", year:2010, poster:"https://image.tmdb.org/t/p/w185/xf9wuDcqlUPWABZNeDKPbZUjWx0.jpg" },
+      { id:2, title:"Oppenheimer", year:2023, poster:"https://image.tmdb.org/t/p/w185/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg" },
+    ]
+  },
+  {
+    id: 4, title: "Poor Things", year: 2023,
+    overview: "The incredible tale about the fantastical evolution of Bella Baxter, a young woman brought back to life by the brilliant and unorthodox scientist Dr. Godwin Baxter. Under his protection, she yearns to learn.",
+    tagline: "A story of self-discovery.",
+    backdrop: "https://image.tmdb.org/t/p/w1280/kDp1vUBnMpe8ak4rjgl3cLELqjU.jpg",
+    poster: "https://image.tmdb.org/t/p/w500/kCGlIMHnOm8JPXIf2ZAjUNOS87H.jpg",
+    trailer_key: "RlbR5N6veqw",
+    runtime: 141, language: "English", country: "UK",
+    genres: ["Comedy","Drama","Romance"],
+    status: { type: "streaming", platform: "Hulu", date: "Feb 2024" },
+    cast: [
+      { name:"Emma Stone", role:"Bella Baxter", img:"https://image.tmdb.org/t/p/w185/b9YkKJcW3pPaXgMB6nMGm6nMDLo.jpg" },
+      { name:"Mark Ruffalo", role:"Duncan Wedderburn", img:"https://image.tmdb.org/t/p/w185/lFSSLTlFozwpaGlO31QB7TKgBXK.jpg" },
+      { name:"Willem Dafoe", role:"Dr. Godwin Baxter", img:"https://image.tmdb.org/t/p/w185/qXnEBMAtxaHDRSiMkEQ6dJZDAMB.jpg" },
+    ],
+    crew: { director:"Yorgos Lanthimos", writer:"Tony McNamara", producer:"Andrew Lowe", composer:"Jerskin Fendrix", dop:"Robbie Ryan" },
+    videos: [
+      { key:"RlbR5N6veqw", name:"Official Trailer", thumb:`https://i.ytimg.com/vi/RlbR5N6veqw/mqdefault.jpg` },
+    ],
+    similar: [
+      { id:9, title:"The Favourite", year:2018, poster:"https://image.tmdb.org/t/p/w185/dqZENchTd7lp5zht7BdlqM7RBhL.jpg" },
+      { id:10, title:"Saltburn", year:2023, poster:"https://image.tmdb.org/t/p/w185/qitIZFKJRi7RWNB9rKVOQDcPoNY.jpg" },
+      { id:11, title:"Barbie", year:2023, poster:"https://image.tmdb.org/t/p/w185/iuFNMS8vlzmIGaJTdNDTlOBCl1I.jpg" },
+    ]
+  },
+  {
+    id: 5, title: "Shogun", year: 2024,
+    overview: "In feudal Japan, shipwrecked English navigator John Blackthorne finds himself in the midst of a dangerous conflict as he becomes entangled in the deadly power struggle for control of the country.",
+    tagline: "Only one can rule.",
+    backdrop: "https://image.tmdb.org/t/p/w1280/yBqHHCFFQq5J4rMqpvjMnYaU7FE.jpg",
+    poster: "https://image.tmdb.org/t/p/w500/7O4iVfOMQmdCSxhOg1WnzG1AgYT.jpg",
+    trailer_key: "Z9OsG5PJNM4",
+    runtime: 60, language: "English/Japanese", country: "USA/Japan",
+    genres: ["Drama","History","Action"],
+    status: { type: "streaming", platform: "Hulu / Disney+", date: "Feb 27, 2024" },
+    cast: [
+      { name:"Hiroyuki Sanada", role:"Yoshii Toranaga", img:"https://image.tmdb.org/t/p/w185/wR1MEqLYJLMIzZ2rjlHFrI1GD0X.jpg" },
+      { name:"Cosmo Jarvis", role:"John Blackthorne", img:"https://image.tmdb.org/t/p/w185/kwCuHuFxbB2NQfFG6G0f5BpFnPL.jpg" },
+    ],
+    crew: { director:"Rachel Kondo", writer:"Rachel Kondo", producer:"Michaela Clavell", composer:"Atticus Ross", dop:"Sam McCurdy" },
+    videos: [
+      { key:"Z9OsG5PJNM4", name:"Official Trailer", thumb:`https://i.ytimg.com/vi/Z9OsG5PJNM4/mqdefault.jpg` },
+    ],
+    similar: [
+      { id:12, title:"Marco Polo", year:2014, poster:"https://image.tmdb.org/t/p/w185/fOmLgAqYmDm9HnG7cKjDOPmRZaJ.jpg" },
+      { id:3, title:"The Last of Us", year:2023, poster:"https://image.tmdb.org/t/p/w185/uKvVjHNqB5VmOrdxqAt2F7J78ED.jpg" },
+      { id:1, title:"Dune: Part Two", year:2024, poster:"https://image.tmdb.org/t/p/w185/8b8R8l88Qje9dn9OE8PY05Nxl1X.jpg" },
+    ]
+  }
+];
+
+// ── INIT ──────────────────────────────────────────────────
+async function init() {
+  showLoading(10);
+  reels = SAMPLE_MOVIES;
+  showLoading(60);
+  renderReels();
+  renderScrollDots();
+  setupGestures();
+  showLoading(100);
+  setTimeout(() => {
+    document.getElementById('loadingBar').style.opacity = '0';
+    showSwipeHint();
+  }, 600);
+}
+
+function showLoading(pct) {
+  const bar = document.getElementById('loadingBar');
+  bar.style.width = pct + '%';
+}
+
+// ── RENDER REELS ──────────────────────────────────────────
+function renderReels() {
+  const track = document.getElementById('reelTrack');
+  track.innerHTML = '';
+  reels.forEach((movie, i) => {
+    const saved = watchLater.some(w => w.id === movie.id);
+    const reel = document.createElement('div');
+    reel.className = 'reel';
+    reel.dataset.index = i;
+    reel.innerHTML = `
+      <img class="reel-bg" src="${movie.backdrop}" loading="${i===0?'eager':'lazy'}" alt="">
+      <div class="reel-overlay"></div>
+      <div class="reel-tap-zone" onclick="togglePlay(${i})"></div>
+      <div class="reel-meta">
+        <div class="reel-title">${movie.title}</div>
+        <div class="reel-year">${movie.year}</div>
+      </div>
+      <button class="reel-bookmark ${saved?'saved':''}" onclick="toggleSave(event,${i})" title="Save to Watch Later">
+        <svg viewBox="0 0 24 24" fill="${saved?'currentColor':'none'}" stroke="currentColor" stroke-width="2">
+          <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+        </svg>
+      </button>
+    `;
+    track.appendChild(reel);
+  });
+}
+
+function renderScrollDots() {
+  const dots = document.getElementById('scrollDots');
+  dots.innerHTML = '';
+  const max = Math.min(reels.length, 8);
+  for(let i=0;i<max;i++){
+    const d = document.createElement('div');
+    d.className = 'scroll-dot' + (i===0?' active':'');
+    dots.appendChild(d);
+  }
+}
+
+function updateScrollDots(idx) {
+  const dots = document.querySelectorAll('.scroll-dot');
+  dots.forEach((d,i) => d.classList.toggle('active', i===idx));
+}
+
+// ── REEL NAVIGATION ──────────────────────────────────────
+function goToReel(idx) {
+  if(idx < 0 || idx >= reels.length || isTransitioning) return;
+  isTransitioning = true;
+  currentReel = idx;
+  const track = document.getElementById('reelTrack');
+  track.style.transform = `translateY(-${idx * 100}dvh)`;
+  updateScrollDots(idx);
+  setTimeout(() => { isTransitioning = false; }, 500);
+}
+
+function togglePlay(idx) {
+  // Visual feedback only (YouTube iframes handle playback)
+}
+
+// ── SAVE SYSTEM ──────────────────────────────────────────
+function toggleSave(e, idx) {
+  e.stopPropagation();
+  const movie = reels[idx];
+  const alreadySaved = watchLater.some(w => w.id === movie.id);
+  if(alreadySaved) {
+    watchLater = watchLater.filter(w => w.id !== movie.id);
+    showToast('Removed from Watch Later');
+  } else {
+    watchLater.push(movie);
+    showToast('Saved to Watch Later');
+  }
+  localStorage.setItem('findr_watchlater', JSON.stringify(watchLater));
+  renderReels();
+  goToReel(currentReel);
+}
+
+// ── GESTURES ─────────────────────────────────────────────
+function setupGestures() {
+  const container = document.getElementById('reel-container');
+  let startX, startY, startTime;
+
+  container.addEventListener('touchstart', e => {
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    startTime = Date.now();
+  }, { passive:true });
+
+  container.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - startX;
+    const dy = e.changedTouches[0].clientY - startY;
+    const dt = Date.now() - startTime;
+    const absDx = Math.abs(dx), absDy = Math.abs(dy);
+
+    if(dt < 300 && absDx < 10 && absDy < 10) return; // tap, not swipe
+
+    if(absDy > absDx && absDy > 40) {
+      // vertical swipe
+      if(dy < -40) goToReel(currentReel + 1);
+      else if(dy > 40) goToReel(currentReel - 1);
+    } else if(absDx > absDy && absDx > 50) {
+      if(dx < -50) openDetails(currentReel);  // swipe left → details
+      else if(dx > 50) openWatchLater();      // swipe right → watch later
+    }
+  }, { passive:true });
+
+  // Desktop wheel
+  let wheelTimer;
+  container.addEventListener('wheel', e => {
+    e.preventDefault();
+    clearTimeout(wheelTimer);
+    wheelTimer = setTimeout(() => {
+      if(e.deltaY > 30) goToReel(currentReel + 1);
+      else if(e.deltaY < -30) goToReel(currentReel - 1);
+    }, 50);
+  }, { passive:false });
+
+  // Desktop keyboard
+  document.addEventListener('keydown', e => {
+    if(activeScreen !== 'reel') return;
+    if(e.key === 'ArrowDown') goToReel(currentReel + 1);
+    if(e.key === 'ArrowUp') goToReel(currentReel - 1);
+    if(e.key === 'ArrowLeft') openDetails(currentReel);
+    if(e.key === 'ArrowRight') openWatchLater();
+  });
+}
+
+// ── DETAILS PAGE ─────────────────────────────────────────
+function openDetails(idx) {
+  const movie = reels[idx];
+  currentDetails = movie;
+  activeScreen = 'details';
+
+  const statusBadge = getStatusBadge(movie.status);
+  const saved = watchLater.some(w => w.id === movie.id);
+
+  const castHTML = movie.cast.map(c => `
+    <div class="cast-card">
+      <img class="cast-img" src="${c.img}" alt="${c.name}" loading="lazy">
+      <div class="cast-name">${c.name}</div>
+      <div class="cast-role">${c.role}</div>
+    </div>
+  `).join('');
+
+  const videosHTML = movie.videos.map(v => `
+    <div class="media-thumb" onclick="playVideo('${v.key}')">
+      <img src="${v.thumb}" alt="${v.name}" loading="lazy">
+      <div class="media-play">
+        <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+      </div>
+      <div class="media-label">${v.name}</div>
+    </div>
+  `).join('');
+
+  const similarHTML = movie.similar.map(s => `
+    <div class="similar-card" onclick="openDetailById(${s.id})">
+      <img class="similar-poster" src="${s.poster}" alt="${s.title}" loading="lazy">
+      <div class="similar-title">${s.title}</div>
+      <div class="similar-year">${s.year}</div>
+    </div>
+  `).join('');
+
+  const releaseHTML = getReleaseHTML(movie.status);
+
+  document.getElementById('detailsContent').innerHTML = `
+    <div class="details-hero">
+      <img class="details-backdrop" src="${movie.backdrop}" alt="" loading="lazy">
+      <div class="details-hero-overlay"></div>
+      <div class="details-hero-content">
+        <img class="details-poster" src="${movie.poster}" alt="${movie.title}">
+        <div class="details-title-block">
+          <div class="details-title">${movie.title}</div>
+          <div class="details-tagline">${movie.tagline || ''}</div>
+          <div class="details-badges">
+            <span class="badge">${movie.year}</span>
+            <span class="badge">${movie.runtime} min</span>
+            <span class="badge">${movie.language}</span>
+            ${statusBadge}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="details-body">
+      ${releaseHTML}
+
+      <div class="details-section">
+        <div class="section-label">Synopsis</div>
+        <div class="synopsis">${movie.overview}</div>
+      </div>
+
+      <div class="details-section">
+        <div class="section-label">Cast</div>
+        <div class="cast-scroll">${castHTML}</div>
+      </div>
+
+      <div class="details-section">
+        <div class="section-label">Crew</div>
+        <div class="crew-grid">
+          ${movie.crew.director ? `<div class="crew-item"><div class="crew-role">Director</div><div class="crew-name">${movie.crew.director}</div></div>` : ''}
+          ${movie.crew.writer ? `<div class="crew-item"><div class="crew-role">Writer</div><div class="crew-name">${movie.crew.writer}</div></div>` : ''}
+          ${movie.crew.producer ? `<div class="crew-item"><div class="crew-role">Producer</div><div class="crew-name">${movie.crew.producer}</div></div>` : ''}
+          ${movie.crew.composer ? `<div class="crew-item"><div class="crew-role">Music</div><div class="crew-name">${movie.crew.composer}</div></div>` : ''}
+          ${movie.crew.dop ? `<div class="crew-item"><div class="crew-role">Cinematography</div><div class="crew-name">${movie.crew.dop}</div></div>` : ''}
+        </div>
+      </div>
+
+      <div class="details-section">
+        <div class="section-label">Trailers & Clips</div>
+        <div class="media-scroll">${videosHTML}</div>
+      </div>
+
+      <div class="details-section">
+        <div class="section-label">Similar Titles</div>
+        <div class="similar-grid">${similarHTML}</div>
+      </div>
+    </div>
+  `;
+
+  const detailsScreen = document.getElementById('screen-details');
+  const reelScreen = document.getElementById('screen-reel');
+  detailsScreen.scrollTop = 0;
+  detailsScreen.classList.remove('hidden');
+  detailsScreen.classList.add('active');
+  document.getElementById('topbar').style.opacity = '0';
+  document.getElementById('topbar').style.pointerEvents = 'none';
+}
+
+function openDetailById(id) {
+  const idx = reels.findIndex(m => m.id === id);
+  if(idx >= 0) openDetails(idx);
+  else {
+    // show in details from similar data
+    const movie = currentDetails?.similar?.find(s => s.id === id);
+    if(movie) showToast('Loading…');
+  }
+}
+
+function closeDetails() {
+  activeScreen = 'reel';
+  const s = document.getElementById('screen-details');
+  s.classList.remove('active');
+  s.classList.add('hidden');
+  document.getElementById('topbar').style.opacity = '1';
+  document.getElementById('topbar').style.pointerEvents = 'all';
+}
+
+function getStatusBadge(status) {
+  if(!status) return '';
+  if(status.type === 'theatres') return `<span class="badge status-theatres">In Theatres</span>`;
+  if(status.type === 'upcoming') return `<span class="badge status-upcoming">Upcoming</span>`;
+  if(status.type === 'streaming') return `<span class="badge status-streaming">Streaming</span>`;
+  return '';
+}
+
+function getReleaseHTML(status) {
+  if(!status) return '';
+  let items = '';
+  if(status.type === 'theatres') {
+    items = `<div class="release-item"><div class="release-dot"></div><div><div class="release-text">In theatres now</div><div class="release-sub">From ${status.date}</div></div></div>`;
+  } else if(status.type === 'streaming') {
+    items = `<div class="release-item"><div class="release-dot" style="background:#78c87a"></div><div><div class="release-text">Streaming on ${status.platform}</div><div class="release-sub">Released ${status.date}</div></div></div>`;
+  } else if(status.type === 'upcoming') {
+    items = `<div class="release-item"><div class="release-dot" style="background:#a0a0ff"></div><div><div class="release-text">Upcoming release</div><div class="release-sub">${status.date}</div></div></div>`;
+  }
+  return `<div class="release-block"><div class="release-block-title">Availability</div>${items}</div>`;
+}
+
+// ── WATCH LATER ─────────────────────────────────────────
+function openWatchLater() {
+  activeScreen = 'watchlater';
+  renderWatchLater();
+  const s = document.getElementById('screen-watchlater');
+  s.classList.remove('hidden');
+  s.classList.add('active');
+  document.getElementById('topbar').style.opacity = '0';
+  document.getElementById('topbar').style.pointerEvents = 'none';
+}
+
+function closeWatchLater() {
+  activeScreen = 'reel';
+  const s = document.getElementById('screen-watchlater');
+  s.classList.remove('active');
+  s.classList.add('hidden');
+  document.getElementById('topbar').style.opacity = '1';
+  document.getElementById('topbar').style.pointerEvents = 'all';
+}
+
+function renderWatchLater() {
+  const grid = document.getElementById('wlGrid');
+  const count = document.getElementById('wlCount');
+  count.textContent = watchLater.length === 0 ? 'Nothing saved yet' : `${watchLater.length} title${watchLater.length!==1?'s':''} saved`;
+
+  if(watchLater.length === 0) {
+    grid.innerHTML = `<div class="wl-empty" style="grid-column:1/-1">
+      <div class="wl-empty-icon">🎬</div>
+      Bookmark trailers while browsing<br>to build your watch list.
+    </div>`;
+    return;
+  }
+
+  grid.innerHTML = watchLater.map(movie => `
+    <div class="wl-card">
+      <img class="wl-poster" src="${movie.poster}" alt="${movie.title}" onclick="openDetailFromWL(${movie.id})" loading="lazy">
+      <button class="wl-card-remove" onclick="removeFromWL(${movie.id})" title="Remove">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+      <div class="wl-card-info" onclick="openDetailFromWL(${movie.id})">
+        <div class="wl-card-title">${movie.title}</div>
+        <div class="wl-card-meta">${movie.year} · ${getStatusLabel(movie.status)}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function openDetailFromWL(id) {
+  closeWatchLater();
+  setTimeout(() => {
+    const idx = reels.findIndex(m => m.id === id);
+    if(idx >= 0) openDetails(idx);
+  }, 300);
+}
+
+function removeFromWL(id) {
+  watchLater = watchLater.filter(w => w.id !== id);
+  localStorage.setItem('findr_watchlater', JSON.stringify(watchLater));
+  renderWatchLater();
+  renderReels();
+  goToReel(currentReel);
+  showToast('Removed from Watch Later');
+}
+
+function getStatusLabel(status) {
+  if(!status) return '';
+  if(status.type === 'streaming') return `on ${status.platform}`;
+  if(status.type === 'theatres') return 'In Theatres';
+  if(status.type === 'upcoming') return 'Upcoming';
+  return '';
+}
+
+// ── SEARCH ──────────────────────────────────────────────
+function openSearch() {
+  document.getElementById('searchWrap').classList.add('open');
+  setTimeout(() => document.getElementById('searchInput').focus(), 350);
+}
+
+function closeSearch() {
+  document.getElementById('searchWrap').classList.remove('open');
+  document.getElementById('searchInput').value = '';
+  document.getElementById('searchResults').innerHTML = '';
+}
+
+function setFilter(btn, filter) {
+  currentFilter = filter;
+  document.querySelectorAll('.filter-chip').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  handleSearch();
+}
+
+function handleSearch() {
+  const q = document.getElementById('searchInput').value.toLowerCase().trim();
+  const results = document.getElementById('searchResults');
+
+  let pool = reels;
+  if(currentFilter === 'movie') pool = reels.filter(m => m.runtime > 60);
+  else if(currentFilter === 'tv') pool = reels.filter(m => m.runtime <= 60);
+  else if(currentFilter === 'streaming') pool = reels.filter(m => m.status?.type === 'streaming');
+  else if(currentFilter === 'theatre') pool = reels.filter(m => m.status?.type === 'theatres');
+
+  if(!q && currentFilter === 'all') { results.innerHTML = ''; return; }
+
+  const filtered = pool.filter(m =>
+    !q ||
+    m.title.toLowerCase().includes(q) ||
+    m.overview.toLowerCase().includes(q) ||
+    m.cast?.some(c => c.name.toLowerCase().includes(q)) ||
+    m.crew?.director?.toLowerCase().includes(q)
+  );
+
+  if(filtered.length === 0) {
+    results.innerHTML = `<div style="padding:16px 0;color:var(--text-dim);font-size:0.78rem;letter-spacing:0.08em;">No results found</div>`;
+    return;
+  }
+
+  results.innerHTML = filtered.map(m => `
+    <div class="search-result-item" onclick="selectSearchResult(${m.id})">
+      <img class="search-result-poster" src="${m.poster}" alt="" loading="lazy">
+      <div class="search-result-info">
+        <div class="search-result-title">${m.title}</div>
+        <div class="search-result-meta">${m.year} · ${m.genres.slice(0,2).join(' / ')}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function selectSearchResult(id) {
+  closeSearch();
+  const idx = reels.findIndex(m => m.id === id);
+  if(idx >= 0) {
+    goToReel(idx);
+    setTimeout(() => openDetails(idx), 300);
+  }
+}
+
+// ── VIDEO MODAL ──────────────────────────────────────────
+function playVideo(key) {
+  const modal = document.getElementById('videoModal');
+  document.getElementById('videoModalIframe').src = `https://www.youtube.com/embed/${key}?autoplay=1&rel=0`;
+  modal.classList.add('open');
+}
+
+function closeVideoModal(e) {
+  if(e && e.target !== document.getElementById('videoModal') && !e.currentTarget.classList.contains('video-modal-close')) return;
+  const modal = document.getElementById('videoModal');
+  modal.classList.remove('open');
+  setTimeout(() => { document.getElementById('videoModalIframe').src = ''; }, 300);
+}
+document.querySelector('.video-modal-close').addEventListener('click', () => {
+  document.getElementById('videoModal').classList.remove('open');
+  setTimeout(() => { document.getElementById('videoModalIframe').src = ''; }, 300);
+});
+
+// ── TOAST ────────────────────────────────────────────────
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// ── SWIPE HINT ───────────────────────────────────────────
+function showSwipeHint() {
+  const hint = document.createElement('div');
+  hint.className = 'swipe-hint';
+  hint.textContent = '↑ scroll · ← details · → saved';
+  document.body.appendChild(hint);
+  setTimeout(() => hint.remove(), 4200);
+}
+
+// ── START ────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
