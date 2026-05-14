@@ -39,7 +39,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 #swl.active{transform:translateX(0);opacity:1}
 
 /* TOPBAR */
-.topbar{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 20px 14px;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(to bottom,rgba(9,9,11,0.97) 0%,transparent 100%);pointer-events:none;transition:opacity 0.3s}
+.topbar{position:absolute;top:0;left:0;right:0;z-index:10;padding:20px 20px 14px;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(to bottom,rgba(9,9,11,0.97) 0%,transparent 100%);pointer-events:none;transition:opacity 0.3s}
 .logo{font-size:1.3rem;font-weight:800;letter-spacing:0.1em;pointer-events:all;cursor:default}
 .logo span{color:var(--accent)}
 .tbns{display:flex;gap:12px;pointer-events:all}
@@ -64,10 +64,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 .reel-bm.saved svg{fill:var(--accent) !important;stroke:var(--accent) !important}
 .reel-bm:active{transform:scale(1.3)}
 
-/* scroll dots */
-.sdots{position:fixed;right:9px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:3px;z-index:50;pointer-events:none}
-.sdot{width:3px;height:3px;border-radius:50%;background:var(--dim);transition:all 0.3s}
-.sdot.on{background:var(--accent);height:14px;border-radius:2px}
+
 
 /* load more */
 .lm-reel{width:100%;height:100dvh;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:var(--bg)}
@@ -75,7 +72,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* SEARCH */
-.sw{position:fixed;top:0;left:0;right:0;z-index:200;padding:15px 17px;background:rgba(9,9,11,0.98);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);transform:translateY(-100%);transition:transform 0.3s cubic-bezier(0.4,0,0.2,1)}
+.sw{position:absolute;top:0;left:0;right:0;z-index:20;padding:15px 17px;background:rgba(9,9,11,0.98);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);transform:translateY(-100%);transition:transform 0.3s cubic-bezier(0.4,0,0.2,1)}
 .sw.open{transform:translateY(0)}
 .srow{display:flex;gap:9px;align-items:center}
 .si{flex:1;background:var(--bg3);border:1px solid var(--border);color:var(--text);font-family:'Raleway',sans-serif;font-size:0.87rem;padding:10px 13px;border-radius:4px;outline:none;transition:border-color 0.2s}
@@ -97,13 +94,13 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 /* DETAILS */
 #sd{background:var(--bg);overflow-y:auto;overflow-x:hidden;scrollbar-width:none}
 #sd::-webkit-scrollbar{display:none}
-.back-btn{position:fixed;top:17px;left:17px;z-index:300;background:rgba(9,9,11,0.78);border:1px solid var(--border);backdrop-filter:blur(12px);border-radius:50%;width:37px;height:37px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text);transition:opacity 0.2s}
+.back-btn{position:absolute;top:16px;left:16px;z-index:20;background:rgba(9,9,11,0.85);border:1px solid var(--border);backdrop-filter:blur(12px);border-radius:50%;width:44px;height:44px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text);transition:opacity 0.2s}
 .back-btn:hover{opacity:0.7}
 .dh{position:relative;width:100%;height:60vmax;max-height:490px;min-height:240px;overflow:hidden}
 .dh-bd{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .dh-g{position:absolute;inset:0;background:linear-gradient(to bottom,transparent 22%,var(--bg) 100%)}
 .dh-cnt{position:absolute;bottom:0;left:0;right:0;padding:20px 18px 0;display:flex;gap:13px;align-items:flex-end}
-.d-poster{width:80px;flex-shrink:0;border-radius:3px;box-shadow:0 8px 26px rgba(0,0,0,0.65);aspect-ratio:2/3;object-fit:cover}
+.d-poster{width:40px;flex-shrink:0;border-radius:3px;box-shadow:0 6px 18px rgba(0,0,0,0.65);aspect-ratio:2/3;object-fit:cover}
 .d-tb{flex:1;min-width:0;padding-bottom:5px}
 .d-title{font-size:clamp(1.1rem,4.5vw,1.8rem);font-weight:700;line-height:1.1;letter-spacing:-0.01em}
 .d-tl{font-size:0.7rem;color:var(--muted);font-style:italic;margin-top:4px;font-family:Georgia,serif;letter-spacing:0.03em}
@@ -112,11 +109,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 .bdg.th{border-color:rgba(200,169,110,0.5);color:var(--accent);background:var(--abg)}
 .bdg.st{border-color:rgba(110,200,122,0.4);color:var(--green);background:rgba(110,200,122,0.08)}
 .bdg.up{border-color:rgba(136,136,255,0.4);color:var(--blue);background:rgba(136,136,255,0.08)}
-/* bookmark button on details page */
-.d-bm{position:absolute;top:17px;right:17px;z-index:10;background:rgba(9,9,11,0.7);border:1px solid var(--border);backdrop-filter:blur(10px);border-radius:50%;width:37px;height:37px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text);transition:transform 0.16s}
-.d-bm:active{transform:scale(1.18)}
-.d-bm svg{width:17px;height:17px;transition:fill 0.2s,stroke 0.2s}
-.d-bm.saved svg{fill:var(--accent) !important;stroke:var(--accent) !important}
+
 
 .d-body{padding:17px 18px 80px}
 .slbl{font-size:0.57rem;letter-spacing:0.24em;text-transform:uppercase;color:var(--dim);font-weight:700;margin-bottom:11px;padding-bottom:7px;border-bottom:1px solid var(--border)}
@@ -153,10 +146,10 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 /* WATCH LATER */
 #swl{background:var(--bg);overflow-y:auto;scrollbar-width:none}
 #swl::-webkit-scrollbar{display:none}
-.wl-h{padding:68px 18px 16px}
+.wl-h{padding:72px 18px 16px}
 .wl-title{font-size:1.4rem;font-weight:800;letter-spacing:-0.01em}
 .wl-cnt{font-size:0.66rem;color:var(--muted);letter-spacing:0.15em;text-transform:uppercase;margin-top:3px;font-weight:600}
-.wl-back{position:fixed;top:17px;right:17px;z-index:300;background:rgba(9,9,11,0.78);border:1px solid var(--border);backdrop-filter:blur(12px);border-radius:50%;width:37px;height:37px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text)}
+.wl-back{position:absolute;top:16px;right:16px;z-index:20;background:rgba(9,9,11,0.85);border:1px solid var(--border);backdrop-filter:blur(12px);border-radius:50%;width:44px;height:44px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text)}
 .wl-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;padding:0 16px 80px}
 .wlc{cursor:pointer;position:relative}
 .wlc-p{width:100%;aspect-ratio:2/3;object-fit:cover;border-radius:3px;background:var(--bg3);display:block}
@@ -188,7 +181,6 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 
 @media(min-width:540px){
   #rc{max-width:390px;margin:0 auto}
-  .sdots{right:calc(50% - 205px)}
 }
 </style>
 </head>
@@ -216,37 +208,32 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 <div id="app" style="display:none">
   <div class="lb" id="lb" style="width:0"></div>
 
-  <!-- Topbar -->
-  <div class="topbar" id="topbar">
-    <div class="logo">findr<span>.</span></div>
-    <div class="tbns">
-      <button class="tbtn" onclick="openSearch()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></button>
-      <button class="tbtn" onclick="openWL()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button>
-    </div>
-  </div>
-
-  <!-- Search -->
-  <div class="sw" id="sw">
-    <div class="srow">
-      <input class="si" id="si" placeholder="Search movies, series, actors…" oninput="doSearch()">
-      <button class="scb" onclick="closeSearch()">Done</button>
-    </div>
-    <div class="fbar">
-      <button class="fc on" onclick="setFilter(this,'all')">All</button>
-      <button class="fc" onclick="setFilter(this,'movie')">Movies</button>
-      <button class="fc" onclick="setFilter(this,'tv')">Series</button>
-      <button class="fc" onclick="setFilter(this,'trending')">Trending</button>
-      <button class="fc" onclick="setFilter(this,'theatre')">In Theatres</button>
-      <button class="fc" onclick="setFilter(this,'streaming')">Streaming Now</button>
-    </div>
-    <div class="sres" id="sres"></div>
-  </div>
-
-  <!-- Reel screen -->
+  <!-- Reel screen — topbar + search are INSIDE this screen so they slide with it -->
   <div class="screen" id="sr">
+    <div class="topbar" id="topbar">
+      <div class="logo">findr<span>.</span></div>
+      <div class="tbns">
+        <button class="tbtn" onclick="openSearch()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></button>
+        <button class="tbtn" onclick="openWL()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button>
+      </div>
+    </div>
+    <div class="sw" id="sw">
+      <div class="srow">
+        <input class="si" id="si" placeholder="Search movies, series, actors…" oninput="doSearch()">
+        <button class="scb" onclick="closeSearch()">Done</button>
+      </div>
+      <div class="fbar">
+        <button class="fc on" onclick="setFilter(this,'all')">All</button>
+        <button class="fc" onclick="setFilter(this,'movie')">Movies</button>
+        <button class="fc" onclick="setFilter(this,'tv')">Series</button>
+        <button class="fc" onclick="setFilter(this,'trending')">Trending</button>
+        <button class="fc" onclick="setFilter(this,'theatre')">In Theatres</button>
+        <button class="fc" onclick="setFilter(this,'streaming')">Streaming Now</button>
+      </div>
+      <div class="sres" id="sres"></div>
+    </div>
     <div id="rc">
       <div class="rt" id="rt"></div>
-      <div class="sdots" id="sdots"></div>
     </div>
   </div>
 
@@ -272,7 +259,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
   <div class="vm" id="vm" onclick="vmBg(event)">
     <div class="vm-i">
       <button class="vm-close" onclick="closeVM()">✕ Close</button>
-      <iframe id="vmf" allowfullscreen allow="autoplay"></iframe>
+      <iframe id="vmf" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin"></iframe>
     </div>
   </div>
 </div>
@@ -326,7 +313,6 @@ async function launch(demo){
   else { await fetchMore(); }
   setLoad(100);
   buildTrack();
-  buildDots();
   setupGestures();
   if(!demo) watchEnd();
   setTimeout(()=>{ document.getElementById('lb').style.opacity='0'; showHint(); }, 600);
@@ -441,7 +427,6 @@ function buildTrack(){
   // Re-add sentinel
   const s=document.createElement('div'); s.className='lm-reel';
   s.innerHTML='<div class="spinner"></div>'; track.appendChild(s);
-  buildDots();
 }
 
 function makeReel(m, i){
@@ -468,23 +453,11 @@ function makeReel(m, i){
 /* ═══════════════════════════════════════
    NAVIGATION
 ═══════════════════════════════════════ */
-function buildDots(){
-  const d=document.getElementById('sdots');
-  const max=Math.min(reels.length,10);
-  d.innerHTML='';
-  for(let i=0;i<max;i++){
-    const el=document.createElement('div');
-    el.className='sdot'+(i===idx?' on':'');
-    d.appendChild(el);
-  }
-}
-function updDots(i){ document.querySelectorAll('.sdot').forEach((d,j)=>d.classList.toggle('on',j===i)); }
 
 function go(i){
   if(i<0||i>=reels.length||busy) return;
   busy=true; idx=i;
   document.getElementById('rt').style.transform=`translateY(-${i*100}dvh)`;
-  updDots(i);
   if(i>=reels.length-3&&!loading&&!DEMO) fetchMore().then(buildTrack);
   setTimeout(()=>busy=false,460);
 }
@@ -577,9 +550,7 @@ function openDetails(i){
     <div class="dh">
       <img class="dh-bd" src="${m.backdrop}" alt="">
       <div class="dh-g"></div>
-      <button class="d-bm${saved?' saved':''}" data-mid="${m.id}" onclick="toggleSave(event,${m.id})" aria-label="Bookmark">
-        <svg viewBox="0 0 24 24" fill="${saved?'currentColor':'none'}" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
-      </button>
+
       <div class="dh-cnt">
         <img class="d-poster" src="${m.poster}" alt="${m.title}">
         <div class="d-tb">
@@ -613,7 +584,6 @@ function openDetails(i){
   document.getElementById('sd').scrollTop=0;
   document.getElementById('sd').classList.remove('hidden');
   document.getElementById('sd').classList.add('active');
-  hideTopbar();
 }
 
 async function openDetById(id,type='movie'){
@@ -631,7 +601,6 @@ function closeDetails(){
   screen='reel';
   const s=document.getElementById('sd');
   s.classList.remove('active'); s.classList.add('hidden');
-  showTopbar();
 }
 
 function statusBadge(s){
@@ -660,13 +629,11 @@ function openWL(){
   screen='watchlater'; renderWL();
   document.getElementById('swl').classList.remove('hidden');
   document.getElementById('swl').classList.add('active');
-  hideTopbar();
 }
 function closeWL(){
   screen='reel';
   document.getElementById('swl').classList.remove('active');
   document.getElementById('swl').classList.add('hidden');
-  showTopbar();
 }
 function renderWL(){
   const grid=document.getElementById('wlgrid');
@@ -762,7 +729,7 @@ function pickResult(id,type){
    VIDEO MODAL
 ═══════════════════════════════════════ */
 function playVideo(key){
-  document.getElementById('vmf').src=`https://www.youtube.com/embed/${key}?autoplay=1&rel=0`;
+  document.getElementById('vmf').src=`https://www.youtube-nocookie.com/embed/${key}?autoplay=1&rel=0&modestbranding=1`;
   document.getElementById('vm').classList.add('open');
 }
 function closeVM(){
@@ -775,8 +742,8 @@ function vmBg(e){ if(e.target===document.getElementById('vm')) closeVM(); }
    UTILS
 ═══════════════════════════════════════ */
 function setLoad(p){ document.getElementById('lb').style.width=p+'%'; }
-function hideTopbar(){ const t=document.getElementById('topbar'); t.style.opacity='0'; t.style.pointerEvents='none'; }
-function showTopbar(){ const t=document.getElementById('topbar'); t.style.opacity='1'; t.style.pointerEvents='all'; }
+
+
 let toastT;
 function showToast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2200); }
 function showHint(){ const h=document.createElement('div'); h.className='sh'; h.textContent='↑↓ scroll  ·  ← details  ·  → saved'; document.getElementById('app').appendChild(h); setTimeout(()=>h.remove(),5000); }
