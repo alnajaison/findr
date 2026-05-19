@@ -84,6 +84,32 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 .fbar::-webkit-scrollbar{display:none}
 .fc{flex-shrink:0;padding:5px 10px;border-radius:2px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Raleway',sans-serif;font-size:0.6rem;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer;transition:all 0.18s;font-weight:700}
 .fc.on{border-color:var(--accent);color:var(--accent);background:var(--abg)}
+.fbtn{background:none;border:none;cursor:pointer;color:var(--muted);font-family:'Raleway',sans-serif;font-size:0.66rem;letter-spacing:0.14em;text-transform:uppercase;font-weight:700;padding:8px;transition:all 0.2s}
+.fbtn:hover{color:var(--accent)}
+.fmenu{position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:999;display:none;align-items:flex-end;opacity:0;transition:opacity 0.3s;pointer-events:none}
+.fmenu.open{display:flex;opacity:1;pointer-events:all}
+.fpanel{width:100%;max-width:500px;background:var(--bg2);border:1px solid var(--border);border-radius:8px 8px 0 0;padding:20px;max-height:70vh;overflow-y:auto;animation:slideUp 0.3s ease}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.fpanel-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;border-bottom:1px solid var(--border);padding-bottom:12px}
+.fpanel-title{font-size:0.85rem;font-weight:700;letter-spacing:0.15em;text-transform:uppercase}
+.fpanel-close{background:none;border:none;cursor:pointer;color:var(--muted);font-size:1.2rem;padding:0;width:24px;height:24px;display:flex;align-items:center;justify-content:center;transition:color 0.2s}
+.fpanel-close:hover{color:var(--text)}
+.fsec{margin-bottom:18px}
+.fsec-lbl{font-size:0.62rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:8px;display:block}
+.fyr-container{display:flex;gap:10px;align-items:center}
+.fyr-input{width:60px;background:var(--bg3);border:1px solid var(--border);color:var(--text);font-family:'Raleway',sans-serif;font-size:0.8rem;padding:6px;border-radius:3px;outline:none}
+.fyr-input:focus{border-color:var(--accent)}
+.fyr-separator{color:var(--muted)}
+.fgenre-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.fgenre-tag{padding:6px 10px;border:1px solid var(--border);border-radius:3px;background:transparent;color:var(--muted);font-family:'Raleway',sans-serif;font-size:0.7rem;cursor:pointer;transition:all 0.2s;border-radius:4px;font-weight:600}
+.fgenre-tag:hover{border-color:var(--accent);color:var(--accent)}
+.fgenre-tag.selected{border-color:var(--accent);background:var(--abg);color:var(--accent)}
+.flang-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.flang-tag{padding:6px 8px;border:1px solid var(--border);border-radius:3px;background:transparent;color:var(--muted);font-family:'Raleway',sans-serif;font-size:0.65rem;cursor:pointer;transition:all 0.2s;text-align:center;font-weight:600}
+.flang-tag:hover{border-color:var(--accent);color:var(--accent)}
+.flang-tag.selected{border-color:var(--accent);background:var(--abg);color:var(--accent)}
+.fapply-btn{width:100%;padding:10px;background:var(--accent);border:none;border-radius:4px;color:#19130a;font-family:'Raleway',sans-serif;font-size:0.76rem;letter-spacing:0.16em;text-transform:uppercase;font-weight:800;cursor:pointer;margin-top:16px;transition:opacity 0.2s}
+.fapply-btn:hover{opacity:0.85}
 .sres{max-height:46vh;overflow-y:auto;margin-top:10px;scrollbar-width:none}
 .sres::-webkit-scrollbar{display:none}
 .sri{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;transition:opacity 0.18s}
@@ -190,19 +216,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 <!-- SETUP SCREEN -->
 <div id="setup">
   <div class="s-logo">findr<span>.</span></div>
-  <div class="s-sub">cinematic discovery</div>
-  <div class="s-card">
-    <div class="s-lbl">TMDB API Key</div>
-    <input class="s-inp" id="keyInput" type="password" placeholder="Paste your free TMDB v3 API key…" autocomplete="off" onkeydown="if(event.key==='Enter')startWithKey()">
-    <div class="s-hint">
-      Get a free key at <a href="https://www.themoviedb.org/settings/api" target="_blank">themoviedb.org</a> → Account Settings → API.<br>
-      Takes ~1 minute. Your key never leaves this browser.
-    </div>
-    <button class="s-btn" onclick="startWithKey()">Launch findr.</button>
-    <button class="s-demo" onclick="startDemo()">Try with demo data (no key needed)</button>
-    <div class="s-err" id="setupErr"></div>
-  </div>
-  <div class="s-note">Powered by The Movie Database (TMDB) API — free for personal use.<br>Trailers load from YouTube.</div>
+  <div class="s-sub">follow what comes after</div>
+
 </div>
 
 <!-- APP -->
@@ -221,6 +236,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
     <div class="sw" id="sw">
       <div class="srow">
         <input class="si" id="si" placeholder="Search movies, series, actors…" oninput="doSearch()">
+        <button class="fbtn" onclick="openFilterMenu()">Filters</button>
         <button class="scb" onclick="closeSearch()">Done</button>
       </div>
       <div class="fbar">
@@ -263,6 +279,53 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
       <iframe id="vmf" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin"></iframe>
     </div>
   </div>
+
+  <!-- Filter Menu -->
+  <div class="fmenu" id="fmenu">
+    <div class="fpanel">
+      <div class="fpanel-header">
+        <div class="fpanel-title">Advanced Filters</div>
+        <button class="fpanel-close" onclick="closeFilterMenu()">×</button>
+      </div>
+      
+      <div class="fsec">
+        <label class="fsec-lbl">Year Range</label>
+        <div class="fyr-container">
+          <input class="fyr-input" type="number" id="yearFrom" placeholder="From" min="1900" max="2100" value="">
+          <span class="fyr-separator">–</span>
+          <input class="fyr-input" type="number" id="yearTo" placeholder="To" min="1900" max="2100" value="">
+        </div>
+      </div>
+
+      <div class="fsec">
+        <label class="fsec-lbl">Genre</label>
+        <div class="fgenre-grid">
+          <button class="fgenre-tag" onclick="toggleGenre(this,'action')">Action</button>
+          <button class="fgenre-tag" onclick="toggleGenre(this,'comedy')">Comedy</button>
+          <button class="fgenre-tag" onclick="toggleGenre(this,'drama')">Drama</button>
+          <button class="fgenre-tag" onclick="toggleGenre(this,'horror')">Horror</button>
+          <button class="fgenre-tag" onclick="toggleGenre(this,'romance')">Romance</button>
+          <button class="fgenre-tag" onclick="toggleGenre(this,'scifi')">Sci-Fi</button>
+          <button class="fgenre-tag" onclick="toggleGenre(this,'thriller')">Thriller</button>
+          <button class="fgenre-tag" onclick="toggleGenre(this,'animation')">Animation</button>
+        </div>
+      </div>
+
+      <div class="fsec">
+        <label class="fsec-lbl">Language</label>
+        <div class="flang-grid">
+          <button class="flang-tag" onclick="toggleLang(this,'en')">English</button>
+          <button class="flang-tag" onclick="toggleLang(this,'es')">Spanish</button>
+          <button class="flang-tag" onclick="toggleLang(this,'fr')">French</button>
+          <button class="flang-tag" onclick="toggleLang(this,'de')">German</button>
+          <button class="flang-tag" onclick="toggleLang(this,'it')">Italian</button>
+          <button class="flang-tag" onclick="toggleLang(this,'ja')">Japanese</button>
+        </div>
+      </div>
+
+      <button class="fapply-btn" onclick="applyAdvancedFilters()">Apply Filters</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -272,7 +335,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 const IMGW  = 'https://image.tmdb.org/t/p/w1280';
 const IMGP  = 'https://image.tmdb.org/t/p/w500';
 const IMGC  = 'https://image.tmdb.org/t/p/w185';
-let KEY     = '';
+const TMDB_API_KEY = '65a86fefe03dca5fdd0f6e00bfbac7d2'; // Hidden API key
+let KEY     = TMDB_API_KEY;
 let DEMO    = false;
 let reels   = [];
 let idx     = 0;
@@ -287,19 +351,18 @@ let pg      = 1;
 let loading = false;
 const SRCS  = ['trending_movie','trending_tv','popular_movie','top_rated_movie','popular_tv','now_playing_movie'];
 
+// Advanced filters
+let advFilters = {
+  yearFrom: null,
+  yearTo: null,
+  genres: new Set(),
+  languages: new Set()
+};
+
 /* ═══════════════════════════════════════
    SETUP
 ═══════════════════════════════════════ */
-async function startWithKey(){
-  const k = document.getElementById('keyInput').value.trim();
-  if(!k){ setErr('Paste your TMDB v3 API key above.'); return; }
-  // Quick validation
-  try {
-    const r = await fetch(`https://api.themoviedb.org/3/configuration?api_key=${k}`);
-    if(!r.ok){ setErr('Invalid API key. Please check and try again.'); return; }
-  } catch(e){ setErr('Network error. Check your connection.'); return; }
-  KEY = k;
-  localStorage.setItem('findr_key', k);
+async function launchApp(){
   launch(false);
 }
 function startDemo(){ DEMO=true; launch(true); }
@@ -320,9 +383,84 @@ async function launch(demo){
 }
 
 window.addEventListener('DOMContentLoaded',()=>{
-  const k = localStorage.getItem('findr_key');
-  if(k){ document.getElementById('keyInput').value=k; }
+  // Auto-launch the app on load
+  setTimeout(()=>launchApp(),800);
 });
+
+/* ═══════════════════════════════════════
+   FILTER MENU
+═══════════════════════════════════════ */
+function openFilterMenu(){
+  document.getElementById('fmenu').classList.add('open');
+}
+function closeFilterMenu(){
+  document.getElementById('fmenu').classList.remove('open');
+}
+function toggleGenre(btn, genre){
+  btn.classList.toggle('selected');
+  if(btn.classList.contains('selected')){
+    advFilters.genres.add(genre);
+  } else {
+    advFilters.genres.delete(genre);
+  }
+}
+function toggleLang(btn, lang){
+  btn.classList.toggle('selected');
+  if(btn.classList.contains('selected')){
+    advFilters.languages.add(lang.toUpperCase());
+  } else {
+    advFilters.languages.delete(lang.toUpperCase());
+  }
+}
+function applyAdvancedFilters(){
+  // Get year values
+  const yearFrom = document.getElementById('yearFrom').value;
+  const yearTo = document.getElementById('yearTo').value;
+  advFilters.yearFrom = yearFrom ? parseInt(yearFrom) : null;
+  advFilters.yearTo = yearTo ? parseInt(yearTo) : null;
+  closeFilterMenu();
+  doSearch();
+  showToast('Filters applied');
+}
+function resetFilters(){
+  advFilters = {
+    yearFrom: null,
+    yearTo: null,
+    genres: new Set(),
+    languages: new Set()
+  };
+  document.querySelectorAll('.fgenre-tag.selected').forEach(btn=>btn.classList.remove('selected'));
+  document.querySelectorAll('.flang-tag.selected').forEach(btn=>btn.classList.remove('selected'));
+  document.getElementById('yearFrom').value = '';
+  document.getElementById('yearTo').value = '';
+}
+function matchesAdvFilters(movie){
+  if(!movie) return false;
+  
+  // Check year range
+  if(advFilters.yearFrom || advFilters.yearTo){
+    const year = parseInt(movie.year);
+    if(advFilters.yearFrom && year < advFilters.yearFrom) return false;
+    if(advFilters.yearTo && year > advFilters.yearTo) return false;
+  }
+  
+  // Check genres
+  if(advFilters.genres.size > 0){
+    const movieGenres = (movie.genres || []).map(g=>g.toLowerCase());
+    const hasGenre = Array.from(advFilters.genres).some(g=>
+      movieGenres.some(mg=>mg.includes(g) || g.includes(mg))
+    );
+    if(!hasGenre) return false;
+  }
+  
+  // Check languages
+  if(advFilters.languages.size > 0){
+    const movieLang = (movie.lang || '').toUpperCase();
+    if(!advFilters.languages.has(movieLang)) return false;
+  }
+  
+  return true;
+}
 
 /* ═══════════════════════════════════════
    TMDB
@@ -691,13 +829,17 @@ async function doSearch(){
   st2=setTimeout(async()=>{
     const q=document.getElementById('si').value.trim();
     const res=document.getElementById('sres');
-    if(!q&&sFilter==='all'){ res.innerHTML=''; return; }
+    if(!q&&sFilter==='all'&&advFilters.genres.size===0&&advFilters.languages.size===0&&!advFilters.yearFrom&&!advFilters.yearTo){ res.innerHTML=''; return; }
     if(DEMO||!q){
       let pool=reels;
       if(sFilter==='movie') pool=reels.filter(m=>m.type==='movie');
       else if(sFilter==='tv') pool=reels.filter(m=>m.type==='tv');
       else if(sFilter==='streaming') pool=reels.filter(m=>m.status?.type==='streaming');
       else if(sFilter==='theatre') pool=reels.filter(m=>m.status?.type==='theatres');
+      
+      // Apply advanced filters
+      pool = pool.filter(m=>matchesAdvFilters(m));
+      
       const items=q?pool.filter(m=>m.title.toLowerCase().includes(q.toLowerCase())):pool.slice(0,10);
       renderSRes(items.map(m=>({id:m.id,type:m.type,title:m.title,year:m.year,poster:m.poster})));
       return;
@@ -707,7 +849,18 @@ async function doSearch(){
       if(sFilter==='movie') data=await api('/search/movie',`query=${encodeURIComponent(q)}`);
       else if(sFilter==='tv') data=await api('/search/tv',`query=${encodeURIComponent(q)}`);
       else data=await api('/search/multi',`query=${encodeURIComponent(q)}`);
-      const results=(data.results||[]).filter(m=>(m.media_type||'movie')!=='person'&&(m.poster_path||m.backdrop_path)).slice(0,12);
+      let results=(data.results||[]).filter(m=>(m.media_type||'movie')!=='person'&&(m.poster_path||m.backdrop_path)).slice(0,12);
+      
+      // Apply advanced filters (convert to movie objects temporarily for filtering)
+      results = results.filter(m=>{
+        const movieObj = {
+          year: (m.release_date || m.first_air_date || '').slice(0,4),
+          genres: [],
+          lang: (m.original_language || '').toUpperCase()
+        };
+        return matchesAdvFilters(movieObj);
+      });
+      
       renderSRes(results.map(m=>({id:m.id,type:m.media_type||(m.name?'tv':'movie'),title:m.title||m.name,year:(m.release_date||m.first_air_date||'').slice(0,4),poster:m.poster_path?IMGC+m.poster_path:''})));
     } catch(e){ res.innerHTML='<div style="color:var(--dim);font-size:0.74rem;padding:8px 0">Search unavailable</div>'; }
   },340);
