@@ -24,8 +24,6 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 .s-hint a{color:var(--accent);text-decoration:none}
 .s-btn{width:100%;padding:13px;background:var(--accent);border:none;border-radius:4px;color:#19130a;font-family:'Raleway',sans-serif;font-size:0.76rem;letter-spacing:0.16em;text-transform:uppercase;font-weight:800;cursor:pointer;transition:opacity 0.2s}
 .s-btn:hover{opacity:0.85}
-.s-demo{margin-top:10px;width:100%;padding:11px;background:transparent;border:1px solid var(--border);border-radius:4px;color:var(--muted);font-family:'Raleway',sans-serif;font-size:0.7rem;letter-spacing:0.14em;text-transform:uppercase;font-weight:700;cursor:pointer;transition:all 0.2s}
-.s-demo:hover{border-color:var(--accent);color:var(--accent)}
 .s-note{margin-top:18px;font-size:0.62rem;color:var(--dim);text-align:center;line-height:1.8;letter-spacing:0.03em;max-width:360px}
 .s-err{color:#f07070;font-size:0.7rem;letter-spacing:0.06em;margin-top:8px;text-align:center;min-height:18px}
 
@@ -337,7 +335,6 @@ const IMGP  = 'https://image.tmdb.org/t/p/w500';
 const IMGC  = 'https://image.tmdb.org/t/p/w185';
 const TMDB_API_KEY = '65a86fefe03dca5fdd0f6e00bfbac7d2'; // Hidden API key
 let KEY     = TMDB_API_KEY;
-let DEMO    = false;
 let reels   = [];
 let idx     = 0;
 let screen  = 'reel';
@@ -363,22 +360,20 @@ let advFilters = {
    SETUP
 ═══════════════════════════════════════ */
 async function launchApp(){
-  launch(false);
+  launch();
 }
-function startDemo(){ DEMO=true; launch(true); }
 function setErr(m){ document.getElementById('setupErr').textContent=m; }
 
-async function launch(demo){
+async function launch(){
   try { wl = JSON.parse(localStorage.getItem('findr_wl')||'[]'); } catch(e){ wl=[]; }
   document.getElementById('setup').style.display='none';
   document.getElementById('app').style.display='block';
   setLoad(10);
-  if(demo){ reels=demoData(); setLoad(85); }
-  else { await fetchMore(); }
+  await fetchMore();
   setLoad(100);
   buildTrack();
   setupGestures();
-  if(!demo) watchEnd();
+  watchEnd();
   setTimeout(()=>{ document.getElementById('lb').style.opacity='0'; showHint(); }, 600);
 }
 
@@ -494,7 +489,7 @@ async function fetchMore(){
     const enriched = (await Promise.all(batch.map(enrich))).filter(Boolean);
     enriched.forEach(m=>seen.add(m.id));
     reels = reels.concat(enriched);
-  } catch(e){ console.error(e); if(!reels.length){ reels=demoData(); } }
+  } catch(e){ console.error(e); }
   loading = false;
 }
 
@@ -597,7 +592,7 @@ function go(i){
   if(i<0||i>=reels.length||busy) return;
   busy=true; idx=i;
   document.getElementById('rt').style.transform=`translateY(-${i*100}dvh)`;
-  if(i>=reels.length-3&&!loading&&!DEMO) fetchMore().then(buildTrack);
+  if(i>=reels.length-3&&!loading) fetchMore().then(buildTrack);
   setTimeout(()=>busy=false,460);
 }
 
@@ -728,7 +723,6 @@ function openDetails(i){
 async function openDetById(id,type='movie'){
   const existing=reels.find(m=>m.id==id);
   if(existing){ openDetails(reels.indexOf(existing)); return; }
-  if(DEMO){ showToast('Load the app with an API key to explore similar titles'); return; }
   showToast('Loading…');
   try {
     const e=await enrich({id,media_type:type,backdrop_path:'x'});
@@ -830,7 +824,7 @@ async function doSearch(){
     const q=document.getElementById('si').value.trim();
     const res=document.getElementById('sres');
     if(!q&&sFilter==='all'&&advFilters.genres.size===0&&advFilters.languages.size===0&&!advFilters.yearFrom&&!advFilters.yearTo){ res.innerHTML=''; return; }
-    if(DEMO||!q){
+    if(!q){
       let pool=reels;
       if(sFilter==='movie') pool=reels.filter(m=>m.type==='movie');
       else if(sFilter==='tv') pool=reels.filter(m=>m.type==='tv');
@@ -902,40 +896,6 @@ let toastT;
 function showToast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2200); }
 function showHint(){ const h=document.createElement('div'); h.className='sh'; h.textContent='↑↓ scroll  ·  ← details  ·  → saved'; document.getElementById('app').appendChild(h); setTimeout(()=>h.remove(),5000); }
 
-/* ═══════════════════════════════════════
-   DEMO DATA
-═══════════════════════════════════════ */
-function demoData(){ return [
-  {id:1,type:'movie',title:'Dune: Part Two',year:'2024',runtime:166,genres:['Sci-Fi','Adventure','Drama'],tagline:'Long live the fighters.',overview:'Paul Atreides unites with Chani and the Fremen while seeking revenge against the conspirators who destroyed his family.',poster:'https://image.tmdb.org/t/p/w500/8b8R8l88Qje9dn9OE8PY05Nxl1X.jpg',backdrop:'https://image.tmdb.org/t/p/w1280/xOMo8BRK7PfcJv9JCnx7s5hj0PX.jpg',lang:'EN',trailerKey:'Way9Dexny3w',status:{type:'streaming',platform:'Max',date:'21 Mar 2024'},
-  cast:[{name:'Timothée Chalamet',role:'Paul Atreides',img:'https://image.tmdb.org/t/p/w185/BE2sdjpgsa2rNTFa66f7upkaOP.jpg'},{name:'Zendaya',role:'Chani',img:'https://image.tmdb.org/t/p/w185/6TE2AlOUqYmsezwMxiOYjJJuDFe.jpg'}],
-  crew:{director:'Denis Villeneuve',writer:'Denis Villeneuve',producer:'Mary Parent',composer:'Hans Zimmer',dop:'Greig Fraser'},
-  videos:[{key:'Way9Dexny3w',name:'Official Trailer',thumb:'https://i.ytimg.com/vi/Way9Dexny3w/mqdefault.jpg'}],
-  similar:[{id:2,type:'movie',title:'Oppenheimer',year:'2023',poster:'https://image.tmdb.org/t/p/w185/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg'}]},
-
-  {id:2,type:'movie',title:'Oppenheimer',year:'2023',runtime:180,genres:['Biography','Drama','History'],tagline:'The world forever changes.',overview:'The story of J. Robert Oppenheimer\'s role in the development of the atomic bomb during World War II.',poster:'https://image.tmdb.org/t/p/w500/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg',backdrop:'https://image.tmdb.org/t/p/w1280/rLb2cwF3Pazuxaj0sRXQ037tGI1.jpg',lang:'EN',trailerKey:'uYPbbksJxIY',status:{type:'streaming',platform:'Peacock',date:'22 Jul 2023'},
-  cast:[{name:'Cillian Murphy',role:'J. Robert Oppenheimer',img:'https://image.tmdb.org/t/p/w185/9nHIfvLcPnVl41C1OQBPJHKBFMG.jpg'},{name:'Emily Blunt',role:'Katherine',img:'https://image.tmdb.org/t/p/w185/5l3Fn1GHhHdKaWLNEPJqB7dZGnE.jpg'}],
-  crew:{director:'Christopher Nolan',writer:'Christopher Nolan',producer:'Emma Thomas',composer:'Ludwig Göransson',dop:'Hoyte van Hoytema'},
-  videos:[{key:'uYPbbksJxIY',name:'Official Trailer',thumb:'https://i.ytimg.com/vi/uYPbbksJxIY/mqdefault.jpg'}],
-  similar:[{id:1,type:'movie',title:'Dune: Part Two',year:'2024',poster:'https://image.tmdb.org/t/p/w185/8b8R8l88Qje9dn9OE8PY05Nxl1X.jpg'}]},
-
-  {id:3,type:'tv',title:'The Last of Us',year:'2023',runtime:60,genres:['Drama','Thriller'],tagline:'When you\'re lost in the darkness, look for the light.',overview:'After a global pandemic destroys civilization, a hardened survivor takes charge of a 14-year-old girl who may be humanity\'s last hope.',poster:'https://image.tmdb.org/t/p/w500/uKvVjHNqB5VmOrdxqAt2F7J78ED.jpg',backdrop:'https://image.tmdb.org/t/p/w1280/uDgy6hyPd82kOHh6I95yvgxSbac.jpg',lang:'EN',trailerKey:'uLtkt8BonKM',status:{type:'streaming',platform:'HBO',date:'15 Jan 2023'},
-  cast:[{name:'Pedro Pascal',role:'Joel Miller',img:'https://image.tmdb.org/t/p/w185/6t1N9j3b67TiofGGzJxnOFdFGkQ.jpg'},{name:'Bella Ramsey',role:'Ellie Williams',img:'https://image.tmdb.org/t/p/w185/oyBEDK3XLbAMkPNO5YhvfHhMFAT.jpg'}],
-  crew:{director:'Craig Mazin',writer:'Neil Druckmann',producer:'Carolyn Strauss',composer:'Gustavo Santaolalla',dop:'Ksenia Sereda'},
-  videos:[{key:'uLtkt8BonKM',name:'Official Trailer',thumb:'https://i.ytimg.com/vi/uLtkt8BonKM/mqdefault.jpg'}],
-  similar:[]},
-
-  {id:4,type:'movie',title:'Poor Things',year:'2023',runtime:141,genres:['Comedy','Drama','Romance'],tagline:'A story of self-discovery.',overview:'The incredible tale about the fantastical evolution of Bella Baxter, a young woman brought back to life by the brilliant scientist Dr. Godwin Baxter.',poster:'https://image.tmdb.org/t/p/w500/kCGlIMHnOm8JPXIf2ZAjUNOS87H.jpg',backdrop:'https://image.tmdb.org/t/p/w1280/kDp1vUBnMpe8ak4rjgl3cLELqjU.jpg',lang:'EN',trailerKey:'RlbR5N6veqw',status:{type:'streaming',platform:'Hulu',date:'Feb 2024'},
-  cast:[{name:'Emma Stone',role:'Bella Baxter',img:'https://image.tmdb.org/t/p/w185/b9YkKJcW3pPaXgMB6nMGm6nMDLo.jpg'},{name:'Mark Ruffalo',role:'Duncan',img:'https://image.tmdb.org/t/p/w185/lFSSLTlFozwpaGlO31QB7TKgBXK.jpg'}],
-  crew:{director:'Yorgos Lanthimos',writer:'Tony McNamara',producer:'Andrew Lowe',composer:'Jerskin Fendrix',dop:'Robbie Ryan'},
-  videos:[{key:'RlbR5N6veqw',name:'Official Trailer',thumb:'https://i.ytimg.com/vi/RlbR5N6veqw/mqdefault.jpg'}],
-  similar:[]},
-
-  {id:5,type:'tv',title:'Shogun',year:'2024',runtime:60,genres:['Drama','History','Action'],tagline:'Only one can rule.',overview:'In feudal Japan, shipwrecked English navigator John Blackthorne finds himself in a deadly power struggle.',poster:'https://image.tmdb.org/t/p/w500/7O4iVfOMQmdCSxhOg1WnzG1AgYT.jpg',backdrop:'https://image.tmdb.org/t/p/w1280/yBqHHCFFQq5J4rMqpvjMnYaU7FE.jpg',lang:'EN/JA',trailerKey:'Z9OsG5PJNM4',status:{type:'streaming',platform:'Hulu',date:'27 Feb 2024'},
-  cast:[{name:'Hiroyuki Sanada',role:'Yoshii Toranaga',img:'https://image.tmdb.org/t/p/w185/wR1MEqLYJLMIzZ2rjlHFrI1GD0X.jpg'}],
-  crew:{director:'Rachel Kondo',writer:'Rachel Kondo',producer:'Michaela Clavell',composer:'Atticus Ross',dop:'Sam McCurdy'},
-  videos:[{key:'Z9OsG5PJNM4',name:'Official Trailer',thumb:'https://i.ytimg.com/vi/Z9OsG5PJNM4/mqdefault.jpg'}],
-  similar:[]}
-];}
 </script>
 </body>
 </html>
