@@ -84,6 +84,10 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 .fc.on{border-color:var(--accent);color:var(--accent);background:var(--abg)}
 .fbtn{background:none;border:none;cursor:pointer;color:var(--muted);font-family:'Raleway',sans-serif;font-size:0.66rem;letter-spacing:0.14em;text-transform:uppercase;font-weight:700;padding:8px;transition:all 0.2s}
 .fbtn:hover{color:var(--accent)}
+.ftype-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ftype-tag{padding:8px 12px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--muted);font-family:'Raleway',sans-serif;font-size:0.7rem;cursor:pointer;transition:all 0.2s;text-align:center;font-weight:600}
+.ftype-tag:hover{border-color:var(--accent);color:var(--accent)}
+.ftype-tag.on{border-color:var(--accent);background:var(--abg);color:var(--accent)}
 .fmenu{position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:999;display:none;align-items:flex-end;opacity:0;transition:opacity 0.3s;pointer-events:none}
 .fmenu.open{display:flex;opacity:1;pointer-events:all}
 .fpanel{width:100%;max-width:500px;background:var(--bg2);border:1px solid var(--border);border-radius:8px 8px 0 0;padding:20px;max-height:70vh;overflow-y:auto;animation:slideUp 0.3s ease}
@@ -228,22 +232,14 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
       <div class="logo">findr<span>.</span></div>
       <div class="tbns">
         <button class="tbtn" onclick="openSearch()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></button>
+        <button class="tbtn" onclick="openFilterMenu()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 4a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v2.586a1 1 0 0 1-.293.707l-6.414 6.414a1 1 0 0 0-.293.707V17l-4 4v-6.586a1 1 0 0 0-.293-.707L3.293 7.293A1 1 0 0 1 3 6.586V4z"/></svg></button>
         <button class="tbtn" onclick="openWL()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button>
       </div>
     </div>
     <div class="sw" id="sw">
       <div class="srow">
         <input class="si" id="si" placeholder="Search movies, series, actors…" oninput="doSearch()">
-        <button class="fbtn" onclick="openFilterMenu()">Filters</button>
         <button class="scb" onclick="closeSearch()">Done</button>
-      </div>
-      <div class="fbar">
-        <button class="fc on" onclick="setFilter(this,'all')">All</button>
-        <button class="fc" onclick="setFilter(this,'movie')">Movies</button>
-        <button class="fc" onclick="setFilter(this,'tv')">Series</button>
-        <button class="fc" onclick="setFilter(this,'trending')">Trending</button>
-        <button class="fc" onclick="setFilter(this,'theatre')">In Theatres</button>
-        <button class="fc" onclick="setFilter(this,'streaming')">Streaming Now</button>
       </div>
       <div class="sres" id="sres"></div>
     </div>
@@ -282,8 +278,20 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
   <div class="fmenu" id="fmenu">
     <div class="fpanel">
       <div class="fpanel-header">
-        <div class="fpanel-title">Advanced Filters</div>
+        <div class="fpanel-title">Filters</div>
         <button class="fpanel-close" onclick="closeFilterMenu()">×</button>
+      </div>
+      
+      <div class="fsec">
+        <label class="fsec-lbl">Content Type</label>
+        <div class="ftype-grid">
+          <button class="ftype-tag on" onclick="toggleTypeFilter(this,'all')">All</button>
+          <button class="ftype-tag" onclick="toggleTypeFilter(this,'movie')">Movies</button>
+          <button class="ftype-tag" onclick="toggleTypeFilter(this,'tv')">Series</button>
+          <button class="ftype-tag" onclick="toggleTypeFilter(this,'trending')">Trending</button>
+          <button class="ftype-tag" onclick="toggleTypeFilter(this,'theatre')">In Theatres</button>
+          <button class="ftype-tag" onclick="toggleTypeFilter(this,'streaming')">Streaming Now</button>
+        </div>
       </div>
       
       <div class="fsec">
@@ -340,7 +348,7 @@ let idx     = 0;
 let screen  = 'reel';
 let busy    = false;
 let wl      = [];
-let sFilter = 'all';
+let typeFilter = 'all';
 let curDet  = null;
 const seen  = new Set();
 let srcIdx  = 0;
@@ -348,8 +356,8 @@ let pg      = 1;
 let loading = false;
 const SRCS  = ['trending_movie','trending_tv','popular_movie','top_rated_movie','popular_tv','now_playing_movie'];
 
-// Advanced filters
-let advFilters = {
+// Advanced filters for reels display
+let reelsFilters = {
   yearFrom: null,
   yearTo: null,
   genres: new Set(),
@@ -394,67 +402,113 @@ function closeFilterMenu(){
 function toggleGenre(btn, genre){
   btn.classList.toggle('selected');
   if(btn.classList.contains('selected')){
-    advFilters.genres.add(genre);
+    reelsFilters.genres.add(genre);
   } else {
-    advFilters.genres.delete(genre);
+    reelsFilters.genres.delete(genre);
   }
 }
 function toggleLang(btn, lang){
   btn.classList.toggle('selected');
   if(btn.classList.contains('selected')){
-    advFilters.languages.add(lang.toUpperCase());
+    reelsFilters.languages.add(lang.toUpperCase());
   } else {
-    advFilters.languages.delete(lang.toUpperCase());
+    reelsFilters.languages.delete(lang.toUpperCase());
   }
+}
+function toggleTypeFilter(btn, type){
+  document.querySelectorAll('.ftype-tag').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  typeFilter = type;
 }
 function applyAdvancedFilters(){
   // Get year values
   const yearFrom = document.getElementById('yearFrom').value;
   const yearTo = document.getElementById('yearTo').value;
-  advFilters.yearFrom = yearFrom ? parseInt(yearFrom) : null;
-  advFilters.yearTo = yearTo ? parseInt(yearTo) : null;
+  reelsFilters.yearFrom = yearFrom ? parseInt(yearFrom) : null;
+  reelsFilters.yearTo = yearTo ? parseInt(yearTo) : null;
   closeFilterMenu();
-  doSearch();
+  // Rebuild reels track with new filters applied
+  idx = 0;
+  buildFilteredTrack();
   showToast('Filters applied');
 }
 function resetFilters(){
-  advFilters = {
+  reelsFilters = {
     yearFrom: null,
     yearTo: null,
     genres: new Set(),
     languages: new Set()
   };
+  typeFilter = 'all';
   document.querySelectorAll('.fgenre-tag.selected').forEach(btn=>btn.classList.remove('selected'));
   document.querySelectorAll('.flang-tag.selected').forEach(btn=>btn.classList.remove('selected'));
+  document.querySelectorAll('.ftype-tag').forEach(btn=>btn.classList.remove('on'));
+  document.querySelector('.ftype-tag').classList.add('on');
   document.getElementById('yearFrom').value = '';
   document.getElementById('yearTo').value = '';
 }
-function matchesAdvFilters(movie){
+function matchesReelsFilters(movie){
   if(!movie) return false;
   
+  // Check type filter
+  if(typeFilter !== 'all'){
+    if(typeFilter === 'movie' && movie.type !== 'movie') return false;
+    if(typeFilter === 'tv' && movie.type !== 'tv') return false;
+    if(typeFilter === 'streaming' && movie.status?.type !== 'streaming') return false;
+    if(typeFilter === 'theatre' && movie.status?.type !== 'theatres') return false;
+    if(typeFilter === 'trending') {
+      // For trending, we'd need a flag on the movie - for now, allow all
+    }
+  }
+  
   // Check year range
-  if(advFilters.yearFrom || advFilters.yearTo){
+  if(reelsFilters.yearFrom || reelsFilters.yearTo){
     const year = parseInt(movie.year);
-    if(advFilters.yearFrom && year < advFilters.yearFrom) return false;
-    if(advFilters.yearTo && year > advFilters.yearTo) return false;
+    if(reelsFilters.yearFrom && year < reelsFilters.yearFrom) return false;
+    if(reelsFilters.yearTo && year > reelsFilters.yearTo) return false;
   }
   
   // Check genres
-  if(advFilters.genres.size > 0){
+  if(reelsFilters.genres.size > 0){
     const movieGenres = (movie.genres || []).map(g=>g.toLowerCase());
-    const hasGenre = Array.from(advFilters.genres).some(g=>
+    const hasGenre = Array.from(reelsFilters.genres).some(g=>
       movieGenres.some(mg=>mg.includes(g) || g.includes(mg))
     );
     if(!hasGenre) return false;
   }
   
   // Check languages
-  if(advFilters.languages.size > 0){
+  if(reelsFilters.languages.size > 0){
     const movieLang = (movie.lang || '').toUpperCase();
-    if(!advFilters.languages.has(movieLang)) return false;
+    if(!reelsFilters.languages.has(movieLang)) return false;
   }
   
   return true;
+}
+
+function buildFilteredTrack(){
+  const track = document.getElementById('rt');
+  track.innerHTML = '';
+  // Filter reels based on current filters
+  const filtered = reels.filter(m => matchesReelsFilters(m));
+  
+  if(filtered.length === 0){
+    const empty = document.createElement('div');
+    empty.className = 'lm-reel';
+    empty.innerHTML = '<div style="color: var(--dim); text-align: center; padding: 40px;">No results match your filters</div>';
+    track.appendChild(empty);
+    return;
+  }
+  
+  filtered.forEach((m, i) => {
+    track.appendChild(makeReel(m, i));
+  });
+  
+  // Re-add sentinel
+  const s = document.createElement('div');
+  s.className = 'lm-reel';
+  s.innerHTML = '<div class="spinner"></div>';
+  track.appendChild(s);
 }
 
 /* ═══════════════════════════════════════
@@ -811,49 +865,17 @@ function closeSearch(){
   document.getElementById('si').value='';
   document.getElementById('sres').innerHTML='';
 }
-function setFilter(btn,f){
-  sFilter=f;
-  document.querySelectorAll('.fc').forEach(b=>b.classList.remove('on'));
-  btn.classList.add('on');
-  doSearch();
-}
 let st2;
 async function doSearch(){
   clearTimeout(st2);
   st2=setTimeout(async()=>{
     const q=document.getElementById('si').value.trim();
     const res=document.getElementById('sres');
-    if(!q&&sFilter==='all'&&advFilters.genres.size===0&&advFilters.languages.size===0&&!advFilters.yearFrom&&!advFilters.yearTo){ res.innerHTML=''; return; }
-    if(!q){
-      let pool=reels;
-      if(sFilter==='movie') pool=reels.filter(m=>m.type==='movie');
-      else if(sFilter==='tv') pool=reels.filter(m=>m.type==='tv');
-      else if(sFilter==='streaming') pool=reels.filter(m=>m.status?.type==='streaming');
-      else if(sFilter==='theatre') pool=reels.filter(m=>m.status?.type==='theatres');
-      
-      // Apply advanced filters
-      pool = pool.filter(m=>matchesAdvFilters(m));
-      
-      const items=q?pool.filter(m=>m.title.toLowerCase().includes(q.toLowerCase())):pool.slice(0,10);
-      renderSRes(items.map(m=>({id:m.id,type:m.type,title:m.title,year:m.year,poster:m.poster})));
-      return;
-    }
+    if(!q){ res.innerHTML=''; return; }
+    
     try {
-      let data;
-      if(sFilter==='movie') data=await api('/search/movie',`query=${encodeURIComponent(q)}`);
-      else if(sFilter==='tv') data=await api('/search/tv',`query=${encodeURIComponent(q)}`);
-      else data=await api('/search/multi',`query=${encodeURIComponent(q)}`);
+      let data = await api('/search/multi',`query=${encodeURIComponent(q)}`);
       let results=(data.results||[]).filter(m=>(m.media_type||'movie')!=='person'&&(m.poster_path||m.backdrop_path)).slice(0,12);
-      
-      // Apply advanced filters (convert to movie objects temporarily for filtering)
-      results = results.filter(m=>{
-        const movieObj = {
-          year: (m.release_date || m.first_air_date || '').slice(0,4),
-          genres: [],
-          lang: (m.original_language || '').toUpperCase()
-        };
-        return matchesAdvFilters(movieObj);
-      });
       
       renderSRes(results.map(m=>({id:m.id,type:m.media_type||(m.name?'tv':'movie'),title:m.title||m.name,year:(m.release_date||m.first_air_date||'').slice(0,4),poster:m.poster_path?IMGC+m.poster_path:''})));
     } catch(e){ res.innerHTML='<div style="color:var(--dim);font-size:0.74rem;padding:8px 0">Search unavailable</div>'; }
