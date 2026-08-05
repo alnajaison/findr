@@ -212,6 +212,14 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
   .wl-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
   .sim-g{grid-template-columns:repeat(auto-fill,minmax(100px,1fr))}
 }
+
+/* ── AVAILABILITY CARD EXTRAS ── */
+.av-platform-line{font-size:0.85rem;font-weight:500;color:var(--text);line-height:1.6;padding:2px 0}
+.av-platform-link{color:var(--green);text-decoration:none;font-weight:700;border-bottom:1px solid rgba(110,200,122,0.35);padding-bottom:1px;transition:border-color 0.2s,color 0.2s}
+.av-platform-link:hover{color:#8ee89a;border-color:rgba(110,200,122,0.8)}
+.av-platform-name{color:var(--green);font-weight:700}
+.av-sep{color:var(--muted)}
+.av-muted{color:var(--muted);font-size:0.78rem}
 </style>
 </head>
 <body>
@@ -758,7 +766,7 @@ function syncBmBtns(id){
 /* ═══════════════════════════════════════
    DETAILS
 ═══════════════════════════════════════ */
-function openDetails(i){
+async function openDetails(i){
   const m=reels[i]; if(!m) return;
   curDet=m; screen='details';
   const saved=isSaved(m.id);
@@ -766,6 +774,11 @@ function openDetails(i){
   const vidH=(m.videos||[]).map(v=>`<div class="mt" onclick="playVideo('${v.key}')"><img src="${v.thumb}" alt="" loading="lazy"><div class="mt-play"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg></div><div class="mt-n">${v.name}</div></div>`).join('')||'<div style="color:var(--dim);font-size:0.75rem;padding:4px 0">No trailers found</div>';
   const simH=(m.similar||[]).filter(s=>s.poster).map(s=>`<div class="sc" onclick="openDetById(${s.id},'${s.type||m.type||'movie'}')"><img class="sc-p" src="${s.poster}" alt="" loading="lazy"><div class="sc-t">${s.title}</div><div class="sc-y">${s.year}</div></div>`).join('');
   const cr=m.crew||{};
+  // Fetch streaming providers (only for streaming status)
+  let watchLinks = [];
+  if(m.status?.type==='streaming'){
+    watchLinks = await fetchWatchProviders(m.id, m.type||'movie');
+  }
 
   document.getElementById('dc').innerHTML=`
     <div class="dh">
@@ -780,6 +793,7 @@ function openDetails(i){
             <span class="bdg">${m.year}</span>
             ${m.runtime?`<span class="bdg">${m.runtime} min</span>`:''}
             ${m.lang?`<span class="bdg">${langName(m.lang)}</span>`:''}
+            ${m.status?.date?`<span class="bdg">${m.status.date}</span>`:''}
             ${statusBadge(m.status)}
           </div>
         </div>
@@ -791,7 +805,7 @@ function openDetails(i){
       </div>
     </div>
     <div class="d-body">
-      ${availBlock(m.status)}
+      ${availBlock(m.status, watchLinks)}
       ${m.overview?`<div class="dsec"><div class="slbl">Synopsis</div><div class="syn">${m.overview}</div></div>`:''}
       ${castH?`<div class="dsec"><div class="slbl">Cast</div><div class="cast-row">${castH}</div></div>`:''}
       ${Object.values(cr).some(Boolean)?`
@@ -821,6 +835,24 @@ async function openDetById(id,type='movie'){
   } catch(err){ showToast('Could not load title'); }
 }
 
+/* ── WATCH PROVIDERS (TMDB /watch/providers) ── */
+async function fetchWatchProviders(id, type){
+  try {
+    const data = await api(`/${type}/${id}/watch/providers`);
+    // TMDB returns providers per country; try IN then US then first available
+    const results = data.results || {};
+    const region = results['IN'] || results['US'] || Object.values(results)[0];
+    if(!region) return [];
+    // Flatrate = subscription streaming; free = free with ads
+    const sources = [...(region.flatrate||[]), ...(region.free||[]), ...(region.ads||[])];
+    // Deduplicate by provider_name
+    const seen = new Set();
+    return sources.filter(p=>{ if(seen.has(p.provider_name)) return false; seen.add(p.provider_name); return true; })
+      .slice(0,5)
+      .map(p=>({ name: p.provider_name, logo: p.logo_path?'https://image.tmdb.org/t/p/w92'+p.logo_path:null, url: region.link||null }));
+  } catch(e){ return []; }
+}
+
 function closeDetails(){
   screen='reel';
   const s=document.getElementById('sd');
@@ -834,16 +866,74 @@ function statusBadge(s){
   if(s.type==='upcoming')  return `<span class="bdg up">Upcoming</span>`;
   return '';
 }
-function availBlock(s){
-  if(!s) return '';
-  const cols={theatres:'var(--accent)',streaming:'var(--green)',upcoming:'var(--blue)'};
-  const labs={theatres:'In theatres',streaming:s.platform||'Available on streaming',upcoming:'Upcoming release'};
-  const subs={theatres:'From '+s.date,streaming:'Released '+s.date,upcoming:s.date};
-  return `<div class="av-card"><div class="av-lbl">Availability</div>
-    <div class="av-row">
-      <div class="av-dot" style="background:${cols[s.type]||'var(--muted)'}"></div>
-      <div><div class="av-t">${labs[s.type]||''}</div><div class="av-s">${subs[s.type]||''}</div></div>
-    </div></div>`;
+
+const PLATFORM_URLS = {
+  'Netflix':              'https://www.netflix.com/in/',
+  'Amazon Prime Video':   'https://www.primevideo.com/',
+  'Disney+ Hotstar':      'https://www.hotstar.com/in/home',
+  'JioHotstar':           'https://www.hotstar.com/in/home',
+  'Hotstar':              'https://www.hotstar.com/in/home',
+  'Disney+':              'https://www.disneyplus.com/',
+  'Apple TV+':            'https://tv.apple.com/',
+  'Apple TV':             'https://tv.apple.com/',
+  'HBO Max':              'https://www.max.com/',
+  'Max':                  'https://www.max.com/',
+  'Hulu':                 'https://www.hulu.com/',
+  'Peacock':              'https://www.peacocktv.com/',
+  'Paramount+':           'https://www.paramountplus.com/',
+  'Crunchyroll':          'https://www.crunchyroll.com/',
+  'Mubi':                 'https://mubi.com/',
+  'ZEE5':                 'https://www.zee5.com/',
+  'SonyLIV':              'https://www.sonyliv.com/',
+  'Aha':                  'https://www.aha.video/',
+  'Sun NXT':              'https://www.sunnxt.com/',
+  'MX Player':            'https://www.mxplayer.in/',
+  'Jio Cinema':           'https://www.jiocinema.com/',
+  'JioCinema':            'https://www.jiocinema.com/',
+  'Voot':                 'https://www.voot.com/',
+  'Lionsgate Play':       'https://www.lionsgateplay.com/',
+  'ShemarooMe':           'https://www.shemaroome.com/',
+  'ErosNow':              'https://erosnow.com/',
+  'Tubi TV':              'https://tubitv.com/',
+  'Pluto TV':             'https://pluto.tv/',
+  'Plex':                 'https://watch.plex.tv/',
+};
+
+function availBlock(s, watchLinks){
+  // In Theatres: badge in header is enough, no box needed
+  if(!s || s.type==='theatres') return '';
+
+  if(s.type==='upcoming'){
+    return `<div class="av-card">
+      <div class="av-lbl">Upcoming Release</div>
+      <div class="av-t" style="color:var(--blue)">Expected ${s.date||'TBA'}</div>
+    </div>`;
+  }
+
+  if(s.type==='streaming'){
+    let inner = '';
+    if(watchLinks && watchLinks.length > 0){
+      // Build "Now available on Netflix, JioHotstar" with each name linked
+      const linked = watchLinks.map(p=>{
+        const href = PLATFORM_URLS[p.name] || p.url || null;
+        return href
+          ? `<a class="av-platform-link" href="${href}" target="_blank" rel="noopener">${p.name}</a>`
+          : `<span class="av-platform-name">${p.name}</span>`;
+      });
+      // Join with commas, last with no trailing comma
+      const platformStr = linked.join('<span class="av-sep">, </span>');
+      inner = `<div class="av-platform-line">Now available on ${platformStr}</div>`;
+    } else {
+      inner = `<div class="av-platform-line av-muted">Streaming — platform info unavailable</div>`;
+    }
+
+    return `<div class="av-card">
+      <div class="av-lbl">Where to Watch</div>
+      ${inner}
+    </div>`;
+  }
+
+  return '';
 }
 
 /* ═══════════════════════════════════════
