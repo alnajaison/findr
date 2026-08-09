@@ -224,7 +224,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 /* ── REEL VIDEO PLAYER ── */
 .reel-video-wrap{position:absolute;inset:0;z-index:1;background:#000;opacity:0;transition:opacity 0.5s ease}
 .reel-video-wrap.visible{opacity:1}
-.reel-video-wrap iframe{position:absolute;top:50%;left:50%;width:177.78vh;height:100vh;min-width:100%;min-height:56.25vw;transform:translate(-50%,-50%);border:none;pointer-events:none}
+.reel-video-wrap iframe{position:absolute;inset:0;width:100%;height:100%;border:none;pointer-events:all}
 .reel-video-wrap video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 
 /* big centre play button (tap-to-play state) */
@@ -277,7 +277,7 @@ const reelState = {};
 let ytApiReady = false;
 window.onYouTubeIframeAPIReady = () => { ytApiReady = true; };
 
-const COBALT_API = 'https://co.wuk.sh/api/json';
+const COBALT_API = 'https://cobalt.tools/api'; // kept for manual Cobalt opt-in
 
 /* ── Controls auto-hide timer ── */
 const hideTimers = {};
@@ -308,31 +308,52 @@ async function reelTapPlay(mid){
   // Init state
   reelState[mid] = { playing:false, muted:true, duration:0, currentTime:0, mode:'none', ytPlayer:null, videoEl:null, progressTimer:null };
 
-  // Try Cobalt first
-  const mp4url = await fetchCobaltMp4(m.trailerKey);
-  if(mp4url){
-    await initVideoEl(mid, mp4url);
-  } else {
-    await initYTPlayer(mid, m.trailerKey);
-  }
+  // Set a hard 12s timeout — if nothing has played by then, give up and restore poster
+  const giveUpTimer = setTimeout(()=>{
+    if(reelState[mid] && !reelState[mid].playing){
+      hideLd(mid);
+      showToast('Could not load trailer');
+    }
+  }, 12000);
+  reelState[mid].giveUpTimer = giveUpTimer;
+
+  // Skip Cobalt for now — go straight to YT (Cobalt public instances are unreliable)
+  // Uncomment the Cobalt block below if you want to try it
+  // const mp4url = await fetchCobaltMp4(m.trailerKey);
+  // if(mp4url){ await initVideoEl(mid, mp4url); return; }
+
+  await initYTPlayer(mid, m.trailerKey);
 }
 
 /* ── COBALT MP4 fetch ── */
 async function fetchCobaltMp4(ytKey){
-  try {
-    const ytUrl = `https://www.youtube.com/watch?v=${ytKey}`;
-    const res = await fetch(COBALT_API, {
-      method:'POST',
-      headers:{'Accept':'application/json','Content-Type':'application/json'},
-      body: JSON.stringify({ url: ytUrl, vCodec:'h264', vQuality:'720', isAudioOnly:false }),
-      signal: AbortSignal.timeout(6000)
-    });
-    if(!res.ok) return null;
-    const data = await res.json();
-    if(data.status==='stream' || data.status==='redirect') return data.url||null;
-    if(data.status==='picker') return data.picker?.[0]?.url||null;
-    return null;
-  } catch(e){ return null; }
+  // Try multiple Cobalt instances in order
+  const instances = [
+    'https://cobalt.tools/api',
+    'https://co.wuk.sh/api/json',
+    'https://cobalt.synzr.space/api/json',
+  ];
+  const ytUrl = `https://www.youtube.com/watch?v=${ytKey}`;
+  for(const endpoint of instances){
+    try {
+      const res = await fetch(endpoint, {
+        method:'POST',
+        headers:{
+          'Accept':'application/json',
+          'Content-Type':'application/json',
+        },
+        body: JSON.stringify({ url: ytUrl, videoQuality:'720', youtubeVideoCodec:'h264', filenameStyle:'basic' }),
+        signal: AbortSignal.timeout(5000)
+      });
+      if(!res.ok) continue;
+      const data = await res.json();
+      // Handle both old and new Cobalt response formats
+      if(data.url) return data.url;
+      if(data.status==='stream'||data.status==='redirect'||data.status==='tunnel') return data.url||null;
+      if(data.status==='picker') return data.picker?.[0]?.url||null;
+    } catch(e){ continue; }
+  }
+  return null;
 }
 
 /* ── OPTION B: Native <video> element ── */
@@ -390,6 +411,7 @@ function initYTPlayer(mid, ytKey){
   // Create a div for YT to replace
   const div = document.createElement('div');
   div.id = 'ytdiv-'+mid;
+  div.style.cssText = 'position:absolute;inset:0;width:100%;height:100%';
   wrap.appendChild(div);
   reelState[mid].mode = 'yt';
 
@@ -401,13 +423,16 @@ function initYTPlayer(mid, ytKey){
   waitForApi(()=>{
     const player = new YT.Player('ytdiv-'+mid, {
       videoId: ytKey,
-      playerVars:{ autoplay:1, mute:1, controls:0, rel:0, modestbranding:1, playsinline:1, enablejsapi:1, origin:location.origin },
+      width: '100%',
+      height: '100%',
+      playerVars:{ autoplay:1, mute:1, controls:1, rel:0, modestbranding:1, playsinline:1, enablejsapi:1, fs:0, origin:location.origin },
       events:{
         onReady(e){
           reelState[mid].ytPlayer = player;
           e.target.playVideo();
           if(ld) ld.classList.remove('show');
           wrap.classList.add('visible');
+          clearTimeout(reelState[mid]?.giveUpTimer);
           reelState[mid].playing = true;
           updatePlayIcon(mid, true);
           showControls(mid);
@@ -1445,7 +1470,7 @@ const reelState = {};
 let ytApiReady = false;
 window.onYouTubeIframeAPIReady = () => { ytApiReady = true; };
 
-const COBALT_API = 'https://co.wuk.sh/api/json';
+const COBALT_API = 'https://cobalt.tools/api'; // kept for manual Cobalt opt-in
 
 /* ── Controls auto-hide timer ── */
 const hideTimers = {};
@@ -1476,31 +1501,52 @@ async function reelTapPlay(mid){
   // Init state
   reelState[mid] = { playing:false, muted:true, duration:0, currentTime:0, mode:'none', ytPlayer:null, videoEl:null, progressTimer:null };
 
-  // Try Cobalt first
-  const mp4url = await fetchCobaltMp4(m.trailerKey);
-  if(mp4url){
-    await initVideoEl(mid, mp4url);
-  } else {
-    await initYTPlayer(mid, m.trailerKey);
-  }
+  // Set a hard 12s timeout — if nothing has played by then, give up and restore poster
+  const giveUpTimer = setTimeout(()=>{
+    if(reelState[mid] && !reelState[mid].playing){
+      hideLd(mid);
+      showToast('Could not load trailer');
+    }
+  }, 12000);
+  reelState[mid].giveUpTimer = giveUpTimer;
+
+  // Skip Cobalt for now — go straight to YT (Cobalt public instances are unreliable)
+  // Uncomment the Cobalt block below if you want to try it
+  // const mp4url = await fetchCobaltMp4(m.trailerKey);
+  // if(mp4url){ await initVideoEl(mid, mp4url); return; }
+
+  await initYTPlayer(mid, m.trailerKey);
 }
 
 /* ── COBALT MP4 fetch ── */
 async function fetchCobaltMp4(ytKey){
-  try {
-    const ytUrl = `https://www.youtube.com/watch?v=${ytKey}`;
-    const res = await fetch(COBALT_API, {
-      method:'POST',
-      headers:{'Accept':'application/json','Content-Type':'application/json'},
-      body: JSON.stringify({ url: ytUrl, vCodec:'h264', vQuality:'720', isAudioOnly:false }),
-      signal: AbortSignal.timeout(6000)
-    });
-    if(!res.ok) return null;
-    const data = await res.json();
-    if(data.status==='stream' || data.status==='redirect') return data.url||null;
-    if(data.status==='picker') return data.picker?.[0]?.url||null;
-    return null;
-  } catch(e){ return null; }
+  // Try multiple Cobalt instances in order
+  const instances = [
+    'https://cobalt.tools/api',
+    'https://co.wuk.sh/api/json',
+    'https://cobalt.synzr.space/api/json',
+  ];
+  const ytUrl = `https://www.youtube.com/watch?v=${ytKey}`;
+  for(const endpoint of instances){
+    try {
+      const res = await fetch(endpoint, {
+        method:'POST',
+        headers:{
+          'Accept':'application/json',
+          'Content-Type':'application/json',
+        },
+        body: JSON.stringify({ url: ytUrl, videoQuality:'720', youtubeVideoCodec:'h264', filenameStyle:'basic' }),
+        signal: AbortSignal.timeout(5000)
+      });
+      if(!res.ok) continue;
+      const data = await res.json();
+      // Handle both old and new Cobalt response formats
+      if(data.url) return data.url;
+      if(data.status==='stream'||data.status==='redirect'||data.status==='tunnel') return data.url||null;
+      if(data.status==='picker') return data.picker?.[0]?.url||null;
+    } catch(e){ continue; }
+  }
+  return null;
 }
 
 /* ── OPTION B: Native <video> element ── */
@@ -1558,6 +1604,7 @@ function initYTPlayer(mid, ytKey){
   // Create a div for YT to replace
   const div = document.createElement('div');
   div.id = 'ytdiv-'+mid;
+  div.style.cssText = 'position:absolute;inset:0;width:100%;height:100%';
   wrap.appendChild(div);
   reelState[mid].mode = 'yt';
 
@@ -1569,13 +1616,16 @@ function initYTPlayer(mid, ytKey){
   waitForApi(()=>{
     const player = new YT.Player('ytdiv-'+mid, {
       videoId: ytKey,
-      playerVars:{ autoplay:1, mute:1, controls:0, rel:0, modestbranding:1, playsinline:1, enablejsapi:1, origin:location.origin },
+      width: '100%',
+      height: '100%',
+      playerVars:{ autoplay:1, mute:1, controls:1, rel:0, modestbranding:1, playsinline:1, enablejsapi:1, fs:0, origin:location.origin },
       events:{
         onReady(e){
           reelState[mid].ytPlayer = player;
           e.target.playVideo();
           if(ld) ld.classList.remove('show');
           wrap.classList.add('visible');
+          clearTimeout(reelState[mid]?.giveUpTimer);
           reelState[mid].playing = true;
           updatePlayIcon(mid, true);
           showControls(mid);
