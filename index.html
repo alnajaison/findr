@@ -220,7 +220,344 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 .av-platform-name{color:var(--green);font-weight:700}
 .av-sep{color:var(--muted)}
 .av-muted{color:var(--muted);font-size:0.78rem}
+
+/* ── REEL VIDEO PLAYER ── */
+.reel-video-wrap{position:absolute;inset:0;z-index:1;background:#000;opacity:0;transition:opacity 0.5s ease}
+.reel-video-wrap.visible{opacity:1}
+.reel-video-wrap iframe{position:absolute;top:50%;left:50%;width:177.78vh;height:100vh;min-width:100%;min-height:56.25vw;transform:translate(-50%,-50%);border:none;pointer-events:none}
+.reel-video-wrap video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+
+/* big centre play button (tap-to-play state) */
+.reel-play-btn{position:absolute;inset:0;z-index:7;display:flex;align-items:center;justify-content:center;cursor:pointer;background:transparent;border:none;padding:0}
+.reel-play-btn .play-ring{width:72px;height:72px;border-radius:50%;background:rgba(0,0,0,0.45);backdrop-filter:blur(6px);border:2px solid rgba(255,255,255,0.35);display:flex;align-items:center;justify-content:center;transition:transform 0.18s,background 0.18s}
+.reel-play-btn:hover .play-ring{transform:scale(1.08);background:rgba(0,0,0,0.6)}
+.reel-play-btn svg{width:28px;height:28px;color:#fff;margin-left:4px}
+.reel-play-btn.hidden{display:none}
+
+/* bottom controls bar */
+.reel-controls{position:absolute;bottom:0;left:0;right:0;z-index:8;padding:0 0 80px;opacity:0;pointer-events:none;transition:opacity 0.25s}
+.reel-controls.visible{opacity:1;pointer-events:all}
+.reel-progress-wrap{position:relative;height:28px;padding:10px 16px;cursor:pointer}
+.reel-progress-bg{position:absolute;left:16px;right:16px;top:50%;transform:translateY(-50%);height:3px;background:rgba(255,255,255,0.2);border-radius:2px}
+.reel-progress-fill{height:100%;background:var(--accent);border-radius:2px;width:0%;transition:width 0.25s linear;position:relative}
+.reel-progress-fill::after{content:'';position:absolute;right:-5px;top:50%;transform:translateY(-50%);width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px rgba(200,169,110,0.6)}
+.reel-progress-wrap input[type=range]{position:absolute;inset:0;width:100%;opacity:0;cursor:pointer;height:100%}
+.reel-btns{display:flex;align-items:center;gap:6px;padding:4px 12px 8px;justify-content:space-between}
+.reel-btns-left{display:flex;align-items:center;gap:6px}
+.reel-btns-right{display:flex;align-items:center;gap:6px}
+.rcbtn{background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.9);padding:6px;border-radius:50%;transition:background 0.18s,transform 0.15s;display:flex;align-items:center;justify-content:center}
+.rcbtn:hover{background:rgba(255,255,255,0.12)}
+.rcbtn:active{transform:scale(0.9)}
+.rcbtn svg{display:block;width:20px;height:20px}
+.rcbtn.sm svg{width:16px;height:16px}
+.reel-time{font-size:0.62rem;color:rgba(255,255,255,0.7);letter-spacing:0.04em;font-weight:500;min-width:72px;text-align:center}
+.reel-vol-btn svg{width:18px;height:18px}
+
+/* loading spinner inside reel */
+.reel-loading{position:absolute;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;pointer-events:none;opacity:0;transition:opacity 0.3s}
+.reel-loading.show{opacity:1}
+.reel-loading .spinner{width:32px;height:32px;border-width:2.5px}
+
+/* controls auto-hide */
+.reel-tap-area{position:absolute;inset:0;z-index:5}
+
 </style>
+<script src="https://www.youtube.com/iframe_api" async>
+/* ═══════════════════════════════════════════════════════
+   REEL VIDEO PLAYER ENGINE
+   Strategy: Option C (tap-to-play) + Option B (Cobalt MP4)
+             + Option A (YouTube iframe) as fallback
+═══════════════════════════════════════════════════════ */
+
+// Per-reel player state
+// { playing, muted, duration, currentTime, ytPlayer, videoEl, mode:'cobalt'|'yt'|'none' }
+const reelState = {};
+
+// YouTube IFrame API ready flag
+let ytApiReady = false;
+window.onYouTubeIframeAPIReady = () => { ytApiReady = true; };
+
+const COBALT_API = 'https://co.wuk.sh/api/json';
+
+/* ── Controls auto-hide timer ── */
+const hideTimers = {};
+function scheduleHide(mid){
+  clearTimeout(hideTimers[mid]);
+  hideTimers[mid] = setTimeout(()=>{
+    document.getElementById('rctl-'+mid)?.classList.remove('visible');
+  }, 3500);
+}
+function reelToggleControlsVis(mid){
+  const ctl = document.getElementById('rctl-'+mid);
+  if(!ctl) return;
+  if(ctl.classList.contains('visible')){ ctl.classList.remove('visible'); clearTimeout(hideTimers[mid]); }
+  else { ctl.classList.add('visible'); scheduleHide(mid); }
+}
+
+/* ── TAP PLAY — entry point ── */
+async function reelTapPlay(mid){
+  const m = reels.find(r=>String(r.id)===String(mid));
+  if(!m || !m.trailerKey){ showToast('No trailer available'); return; }
+
+  // Hide the big play button, show loading
+  const pb = document.getElementById('rpb-'+mid);
+  const ld = document.getElementById('rld-'+mid);
+  if(pb) pb.classList.add('hidden');
+  if(ld) ld.classList.add('show');
+
+  // Init state
+  reelState[mid] = { playing:false, muted:true, duration:0, currentTime:0, mode:'none', ytPlayer:null, videoEl:null, progressTimer:null };
+
+  // Try Cobalt first
+  const mp4url = await fetchCobaltMp4(m.trailerKey);
+  if(mp4url){
+    await initVideoEl(mid, mp4url);
+  } else {
+    await initYTPlayer(mid, m.trailerKey);
+  }
+}
+
+/* ── COBALT MP4 fetch ── */
+async function fetchCobaltMp4(ytKey){
+  try {
+    const ytUrl = `https://www.youtube.com/watch?v=${ytKey}`;
+    const res = await fetch(COBALT_API, {
+      method:'POST',
+      headers:{'Accept':'application/json','Content-Type':'application/json'},
+      body: JSON.stringify({ url: ytUrl, vCodec:'h264', vQuality:'720', isAudioOnly:false }),
+      signal: AbortSignal.timeout(6000)
+    });
+    if(!res.ok) return null;
+    const data = await res.json();
+    if(data.status==='stream' || data.status==='redirect') return data.url||null;
+    if(data.status==='picker') return data.picker?.[0]?.url||null;
+    return null;
+  } catch(e){ return null; }
+}
+
+/* ── OPTION B: Native <video> element ── */
+async function initVideoEl(mid, src){
+  const wrap = document.getElementById('rvw-'+mid);
+  const ld   = document.getElementById('rld-'+mid);
+  if(!wrap) return;
+
+  const vid = document.createElement('video');
+  vid.src = src;
+  vid.muted = true;
+  vid.autoplay = false;
+  vid.playsInline = true;
+  vid.loop = false;
+  vid.preload = 'auto';
+
+  wrap.appendChild(vid);
+  reelState[mid].videoEl = vid;
+  reelState[mid].mode = 'cobalt';
+
+  vid.addEventListener('loadedmetadata', ()=>{
+    reelState[mid].duration = vid.duration;
+    updateTimeDisplay(mid);
+  });
+  vid.addEventListener('canplay', ()=>{
+    if(ld) ld.classList.remove('show');
+    wrap.classList.add('visible');
+    vid.play().then(()=>{
+      reelState[mid].playing = true;
+      updatePlayIcon(mid, true);
+      showControls(mid);
+      startProgressTimer(mid);
+    }).catch(()=>{});
+  });
+  vid.addEventListener('ended', ()=>{
+    reelState[mid].playing = false;
+    updatePlayIcon(mid, false);
+    clearInterval(reelState[mid].progressTimer);
+  });
+  vid.addEventListener('error', ()=>{
+    // Cobalt video failed mid-play → fallback to YT
+    wrap.innerHTML='';
+    initYTPlayer(mid, reels.find(r=>String(r.id)===String(mid))?.trailerKey);
+  });
+  vid.load();
+}
+
+/* ── OPTION A: YouTube IFrame fallback ── */
+function initYTPlayer(mid, ytKey){
+  if(!ytKey) { hideLd(mid); showToast('No trailer found'); return; }
+  const wrap = document.getElementById('rvw-'+mid);
+  const ld   = document.getElementById('rld-'+mid);
+  if(!wrap) return;
+
+  // Create a div for YT to replace
+  const div = document.createElement('div');
+  div.id = 'ytdiv-'+mid;
+  wrap.appendChild(div);
+  reelState[mid].mode = 'yt';
+
+  const waitForApi = (cb) => {
+    if(ytApiReady && window.YT?.Player) cb();
+    else setTimeout(()=>waitForApi(cb), 150);
+  };
+
+  waitForApi(()=>{
+    const player = new YT.Player('ytdiv-'+mid, {
+      videoId: ytKey,
+      playerVars:{ autoplay:1, mute:1, controls:0, rel:0, modestbranding:1, playsinline:1, enablejsapi:1, origin:location.origin },
+      events:{
+        onReady(e){
+          reelState[mid].ytPlayer = player;
+          e.target.playVideo();
+          if(ld) ld.classList.remove('show');
+          wrap.classList.add('visible');
+          reelState[mid].playing = true;
+          updatePlayIcon(mid, true);
+          showControls(mid);
+          // YT doesn't give native progress events; poll
+          reelState[mid].progressTimer = setInterval(()=>{
+            if(!reelState[mid]?.ytPlayer) return;
+            try {
+              const cur = player.getCurrentTime()||0;
+              const dur = player.getDuration()||0;
+              reelState[mid].currentTime = cur;
+              reelState[mid].duration    = dur;
+              updateProgress(mid, cur, dur);
+            } catch(e){}
+          }, 500);
+        },
+        onStateChange(e){
+          const s = e.data;
+          if(s===YT.PlayerState.PLAYING){ reelState[mid].playing=true; updatePlayIcon(mid,true); }
+          if(s===YT.PlayerState.PAUSED||s===YT.PlayerState.ENDED){ reelState[mid].playing=false; updatePlayIcon(mid,false); }
+        },
+        onError(){ hideLd(mid); showToast('Trailer unavailable'); }
+      }
+    });
+  });
+}
+
+function hideLd(mid){ document.getElementById('rld-'+mid)?.classList.remove('show'); document.getElementById('rpb-'+mid)?.classList.remove('hidden'); }
+
+/* ── CONTROLS ── */
+function showControls(mid){
+  const ctl = document.getElementById('rctl-'+mid);
+  if(ctl){ ctl.classList.add('visible'); scheduleHide(mid); }
+  // Wire tap-area to toggle controls
+  const ta = document.getElementById('rta-'+mid);
+  if(ta) ta.onclick = ()=>{ if(reelState[mid]?.playing!==undefined) reelToggleControlsVis(mid); };
+}
+
+function reelTogglePlay(mid){
+  const st = reelState[mid]; if(!st) return;
+  if(st.mode==='cobalt' && st.videoEl){
+    if(st.playing){ st.videoEl.pause(); st.playing=false; updatePlayIcon(mid,false); clearInterval(st.progressTimer); }
+    else { st.videoEl.play(); st.playing=true; updatePlayIcon(mid,true); startProgressTimer(mid); }
+  } else if(st.mode==='yt' && st.ytPlayer){
+    if(st.playing){ st.ytPlayer.pauseVideo(); }
+    else { st.ytPlayer.playVideo(); }
+  }
+  scheduleHide(mid);
+}
+
+function reelPause(mid){
+  const st = reelState[mid]; if(!st) return;
+  if(st.mode==='cobalt' && st.videoEl && st.playing){ st.videoEl.pause(); st.playing=false; updatePlayIcon(mid,false); clearInterval(st.progressTimer); }
+  if(st.mode==='yt' && st.ytPlayer){ try{ st.ytPlayer.pauseVideo(); }catch(e){} }
+}
+
+function reelSkip(mid, secs){
+  const st = reelState[mid]; if(!st) return;
+  if(st.mode==='cobalt' && st.videoEl){
+    st.videoEl.currentTime = Math.max(0, Math.min(st.videoEl.duration||0, st.videoEl.currentTime+secs));
+  } else if(st.mode==='yt' && st.ytPlayer){
+    try{ st.ytPlayer.seekTo(Math.max(0,(st.ytPlayer.getCurrentTime()||0)+secs), true); }catch(e){}
+  }
+  scheduleHide(mid);
+}
+
+function reelToggleMute(mid){
+  const st = reelState[mid]; if(!st) return;
+  st.muted = !st.muted;
+  if(st.mode==='cobalt' && st.videoEl) st.videoEl.muted = st.muted;
+  if(st.mode==='yt' && st.ytPlayer){ try{ st.muted ? st.ytPlayer.mute() : st.ytPlayer.unMute(); }catch(e){} }
+  // Update mute icon
+  const icon = document.getElementById('rvbi-'+mid);
+  if(icon) icon.innerHTML = st.muted
+    ? '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/>'
+    : '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>';
+  scheduleHide(mid);
+}
+
+function reelSeekDrag(mid, val){
+  // Live visual update while dragging
+  const st=reelState[mid]; if(!st||!st.duration) return;
+  const t=(val/100)*st.duration;
+  updateProgress(mid, t, st.duration);
+}
+function reelSeekCommit(mid, val){
+  const st=reelState[mid]; if(!st||!st.duration) return;
+  const t=(val/100)*st.duration;
+  if(st.mode==='cobalt'&&st.videoEl) st.videoEl.currentTime=t;
+  if(st.mode==='yt'&&st.ytPlayer){ try{ st.ytPlayer.seekTo(t,true); }catch(e){} }
+  scheduleHide(mid);
+}
+
+/* ── PROGRESS ── */
+function startProgressTimer(mid){
+  const st=reelState[mid]; if(!st||!st.videoEl) return;
+  clearInterval(st.progressTimer);
+  st.progressTimer = setInterval(()=>{
+    if(!st.videoEl) return;
+    const cur=st.videoEl.currentTime||0, dur=st.videoEl.duration||0;
+    st.currentTime=cur; st.duration=dur;
+    updateProgress(mid,cur,dur);
+  },400);
+}
+function updateProgress(mid,cur,dur){
+  const fill=document.getElementById('rpf-'+mid);
+  const range=document.querySelector(`#rpw-${mid} input[type=range]`);
+  const pct=dur?((cur/dur)*100):0;
+  if(fill) fill.style.width=pct+'%';
+  if(range) range.value=pct;
+  updateTimeDisplay(mid,cur,dur);
+}
+function updateTimeDisplay(mid,cur,dur){
+  const el=document.getElementById('rtm-'+mid);
+  if(!el) return;
+  const st=reelState[mid];
+  cur=cur??st?.currentTime??0; dur=dur??st?.duration??0;
+  el.textContent=`${fmtTime(cur)} / ${fmtTime(dur)}`;
+}
+function fmtTime(s){ const m=Math.floor(s/60); const sec=Math.floor(s%60); return `${m}:${sec.toString().padStart(2,'0')}` }
+
+/* ── PLAY ICON SWAP ── */
+function updatePlayIcon(mid, playing){
+  const ic=document.getElementById('rppi-'+mid); if(!ic) return;
+  ic.innerHTML = playing
+    ? '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>'  // pause
+    : '<polygon points="5,3 19,12 5,21"/>';  // play
+}
+
+/* ── GARBAGE COLLECT old players ── */
+function reelGarbageCollect(currentIdx){
+  // Destroy players more than 2 reels away
+  Object.keys(reelState).forEach(mid=>{
+    const reelIdx = reels.findIndex(r=>String(r.id)===String(mid));
+    if(Math.abs(reelIdx-currentIdx)>2){
+      const st=reelState[mid];
+      if(st.progressTimer) clearInterval(st.progressTimer);
+      if(st.videoEl){ st.videoEl.pause(); st.videoEl.src=''; }
+      if(st.ytPlayer){ try{ st.ytPlayer.destroy(); }catch(e){} }
+      const wrap=document.getElementById('rvw-'+mid);
+      if(wrap){ wrap.innerHTML=''; wrap.classList.remove('visible'); }
+      const pb=document.getElementById('rpb-'+mid);
+      if(pb) pb.classList.remove('hidden');
+      const ctl=document.getElementById('rctl-'+mid);
+      if(ctl) ctl.classList.remove('visible');
+      delete reelState[mid];
+    }
+  });
+}
+
+</script>
 </head>
 <body>
 
@@ -667,14 +1004,58 @@ function makeReel(m,i){
   const saved=isSaved(m.id);
   const el=document.createElement('div');
   el.className='reel'; el.dataset.id=m.id; el.dataset.i=i;
+  el.dataset.ytkey=m.trailerKey||'';
   el.innerHTML=`
     <img class="reel-bg" src="${m.backdrop}" loading="${i<3?'eager':'lazy'}" alt="">
+    <div class="reel-video-wrap" id="rvw-${m.id}"></div>
     <div class="reel-ov"></div>
-    <div class="reel-tz" data-i="${i}"></div>
-    <div class="reel-meta">
+    <div class="reel-loading" id="rld-${m.id}"><div class="spinner"></div></div>
+    <button class="reel-play-btn" id="rpb-${m.id}" onclick="reelTapPlay('${m.id}')" aria-label="Play trailer">
+      <div class="play-ring">
+        <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+      </div>
+    </button>
+    <div class="reel-tap-area" id="rta-${m.id}"></div>
+    <div class="reel-meta" id="rmeta-${m.id}">
       <div class="reel-title">${m.title}</div>
       <div class="reel-year">${m.year}</div>
       <div class="reel-gtags">${m.genres.map(g=>`<span class="reel-gt">${g}</span>`).join('')}</div>
+    </div>
+    <div class="reel-controls" id="rctl-${m.id}">
+      <div class="reel-progress-wrap" id="rpw-${m.id}">
+        <div class="reel-progress-bg"><div class="reel-progress-fill" id="rpf-${m.id}"></div></div>
+        <input type="range" min="0" max="100" value="0" step="0.1"
+          oninput="reelSeekDrag('${m.id}',this.value)"
+          onchange="reelSeekCommit('${m.id}',this.value)">
+      </div>
+      <div class="reel-btns">
+        <div class="reel-btns-left">
+          <button class="rcbtn" onclick="reelSkip('${m.id}',-10)" title="Back 10s">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 .49-3.32"/>
+              <text x="8" y="14" font-size="5.5" fill="currentColor" stroke="none" font-family="Raleway,sans-serif" font-weight="700">10</text>
+            </svg>
+          </button>
+          <button class="rcbtn" id="rppb-${m.id}" onclick="reelTogglePlay('${m.id}')" title="Play/Pause">
+            <svg viewBox="0 0 24 24" fill="currentColor" id="rppi-${m.id}"><polygon points="5,3 19,12 5,21"/></svg>
+          </button>
+          <button class="rcbtn" onclick="reelSkip('${m.id}',10)" title="Forward 10s">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-.49-3.32"/>
+              <text x="8" y="14" font-size="5.5" fill="currentColor" stroke="none" font-family="Raleway,sans-serif" font-weight="700">10</text>
+            </svg>
+          </button>
+          <span class="reel-time" id="rtm-${m.id}">0:00 / 0:00</span>
+        </div>
+        <div class="reel-btns-right">
+          <button class="rcbtn reel-vol-btn" id="rvb-${m.id}" onclick="reelToggleMute('${m.id}')" title="Mute/Unmute">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="rvbi-${m.id}">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
+            </svg>
+          </button>
+        </div>
+      </div>
     </div>
     <button class="reel-bm${saved?' saved':''}" data-mid="${m.id}" onclick="toggleSave(event,'${m.id}')" aria-label="Bookmark">
       <svg viewBox="0 0 24 24" fill="${saved?'currentColor':'none'}" stroke="currentColor" stroke-width="2">
@@ -689,12 +1070,16 @@ function makeReel(m,i){
 ═══════════════════════════════════════ */
 function go(i){
   if(i<0||i>=reels.length||busy) return;
+  // Pause current video before sliding
+  if(reels[idx]) reelPause(reels[idx].id);
   busy=true; idx=i;
   document.getElementById('rt').style.transform=`translateY(-${i*100}dvh)`;
   if(i>=reels.length-3&&!loading){
     const hasF=reelsFilters.yearFrom||reelsFilters.yearTo||reelsFilters.genres.size>0||reelsFilters.languages.size>0||typeFilter!=='all';
     (hasF?fetchFiltered():fetchMore()).then(buildTrack);
   }
+  // Cleanup players too far away (keep window of 3)
+  reelGarbageCollect(i);
   setTimeout(()=>busy=false,460);
 }
 
@@ -708,7 +1093,12 @@ function setupGestures(){
   c.addEventListener('touchend',e=>{
     const dx=e.changedTouches[0].clientX-sx, dy=e.changedTouches[0].clientY-sy;
     const dt=Date.now()-st, adx=Math.abs(dx), ady=Math.abs(dy);
-    if(dt<250&&adx<14&&ady<14) return;
+    // Pure tap on the tap-area while video playing → toggle controls visibility
+    if(dt<250&&adx<14&&ady<14){
+      const mid=reels[idx]?.id;
+      if(mid && reelState[mid]?.playing) reelToggleControlsVis(mid);
+      return;
+    }
     if(ady>adx&&ady>38){ if(dy<-38) go(idx+1); else go(idx-1); }
     else if(adx>ady&&adx>48){ if(dx<-48) openDetails(idx); else openWL(); }
   },{passive:true});
@@ -1040,6 +1430,301 @@ function setLoad(p){ document.getElementById('lb').style.width=p+'%'; }
 let toastT;
 function showToast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2200); }
 function showHint(){ const h=document.createElement('div'); h.className='sh'; h.textContent='↑↓ scroll  ·  ← details  ·  → saved'; document.getElementById('app').appendChild(h); setTimeout(()=>h.remove(),5000); }
+
+/* ═══════════════════════════════════════════════════════
+   REEL VIDEO PLAYER ENGINE
+   Strategy: Option C (tap-to-play) + Option B (Cobalt MP4)
+             + Option A (YouTube iframe) as fallback
+═══════════════════════════════════════════════════════ */
+
+// Per-reel player state
+// { playing, muted, duration, currentTime, ytPlayer, videoEl, mode:'cobalt'|'yt'|'none' }
+const reelState = {};
+
+// YouTube IFrame API ready flag
+let ytApiReady = false;
+window.onYouTubeIframeAPIReady = () => { ytApiReady = true; };
+
+const COBALT_API = 'https://co.wuk.sh/api/json';
+
+/* ── Controls auto-hide timer ── */
+const hideTimers = {};
+function scheduleHide(mid){
+  clearTimeout(hideTimers[mid]);
+  hideTimers[mid] = setTimeout(()=>{
+    document.getElementById('rctl-'+mid)?.classList.remove('visible');
+  }, 3500);
+}
+function reelToggleControlsVis(mid){
+  const ctl = document.getElementById('rctl-'+mid);
+  if(!ctl) return;
+  if(ctl.classList.contains('visible')){ ctl.classList.remove('visible'); clearTimeout(hideTimers[mid]); }
+  else { ctl.classList.add('visible'); scheduleHide(mid); }
+}
+
+/* ── TAP PLAY — entry point ── */
+async function reelTapPlay(mid){
+  const m = reels.find(r=>String(r.id)===String(mid));
+  if(!m || !m.trailerKey){ showToast('No trailer available'); return; }
+
+  // Hide the big play button, show loading
+  const pb = document.getElementById('rpb-'+mid);
+  const ld = document.getElementById('rld-'+mid);
+  if(pb) pb.classList.add('hidden');
+  if(ld) ld.classList.add('show');
+
+  // Init state
+  reelState[mid] = { playing:false, muted:true, duration:0, currentTime:0, mode:'none', ytPlayer:null, videoEl:null, progressTimer:null };
+
+  // Try Cobalt first
+  const mp4url = await fetchCobaltMp4(m.trailerKey);
+  if(mp4url){
+    await initVideoEl(mid, mp4url);
+  } else {
+    await initYTPlayer(mid, m.trailerKey);
+  }
+}
+
+/* ── COBALT MP4 fetch ── */
+async function fetchCobaltMp4(ytKey){
+  try {
+    const ytUrl = `https://www.youtube.com/watch?v=${ytKey}`;
+    const res = await fetch(COBALT_API, {
+      method:'POST',
+      headers:{'Accept':'application/json','Content-Type':'application/json'},
+      body: JSON.stringify({ url: ytUrl, vCodec:'h264', vQuality:'720', isAudioOnly:false }),
+      signal: AbortSignal.timeout(6000)
+    });
+    if(!res.ok) return null;
+    const data = await res.json();
+    if(data.status==='stream' || data.status==='redirect') return data.url||null;
+    if(data.status==='picker') return data.picker?.[0]?.url||null;
+    return null;
+  } catch(e){ return null; }
+}
+
+/* ── OPTION B: Native <video> element ── */
+async function initVideoEl(mid, src){
+  const wrap = document.getElementById('rvw-'+mid);
+  const ld   = document.getElementById('rld-'+mid);
+  if(!wrap) return;
+
+  const vid = document.createElement('video');
+  vid.src = src;
+  vid.muted = true;
+  vid.autoplay = false;
+  vid.playsInline = true;
+  vid.loop = false;
+  vid.preload = 'auto';
+
+  wrap.appendChild(vid);
+  reelState[mid].videoEl = vid;
+  reelState[mid].mode = 'cobalt';
+
+  vid.addEventListener('loadedmetadata', ()=>{
+    reelState[mid].duration = vid.duration;
+    updateTimeDisplay(mid);
+  });
+  vid.addEventListener('canplay', ()=>{
+    if(ld) ld.classList.remove('show');
+    wrap.classList.add('visible');
+    vid.play().then(()=>{
+      reelState[mid].playing = true;
+      updatePlayIcon(mid, true);
+      showControls(mid);
+      startProgressTimer(mid);
+    }).catch(()=>{});
+  });
+  vid.addEventListener('ended', ()=>{
+    reelState[mid].playing = false;
+    updatePlayIcon(mid, false);
+    clearInterval(reelState[mid].progressTimer);
+  });
+  vid.addEventListener('error', ()=>{
+    // Cobalt video failed mid-play → fallback to YT
+    wrap.innerHTML='';
+    initYTPlayer(mid, reels.find(r=>String(r.id)===String(mid))?.trailerKey);
+  });
+  vid.load();
+}
+
+/* ── OPTION A: YouTube IFrame fallback ── */
+function initYTPlayer(mid, ytKey){
+  if(!ytKey) { hideLd(mid); showToast('No trailer found'); return; }
+  const wrap = document.getElementById('rvw-'+mid);
+  const ld   = document.getElementById('rld-'+mid);
+  if(!wrap) return;
+
+  // Create a div for YT to replace
+  const div = document.createElement('div');
+  div.id = 'ytdiv-'+mid;
+  wrap.appendChild(div);
+  reelState[mid].mode = 'yt';
+
+  const waitForApi = (cb) => {
+    if(ytApiReady && window.YT?.Player) cb();
+    else setTimeout(()=>waitForApi(cb), 150);
+  };
+
+  waitForApi(()=>{
+    const player = new YT.Player('ytdiv-'+mid, {
+      videoId: ytKey,
+      playerVars:{ autoplay:1, mute:1, controls:0, rel:0, modestbranding:1, playsinline:1, enablejsapi:1, origin:location.origin },
+      events:{
+        onReady(e){
+          reelState[mid].ytPlayer = player;
+          e.target.playVideo();
+          if(ld) ld.classList.remove('show');
+          wrap.classList.add('visible');
+          reelState[mid].playing = true;
+          updatePlayIcon(mid, true);
+          showControls(mid);
+          // YT doesn't give native progress events; poll
+          reelState[mid].progressTimer = setInterval(()=>{
+            if(!reelState[mid]?.ytPlayer) return;
+            try {
+              const cur = player.getCurrentTime()||0;
+              const dur = player.getDuration()||0;
+              reelState[mid].currentTime = cur;
+              reelState[mid].duration    = dur;
+              updateProgress(mid, cur, dur);
+            } catch(e){}
+          }, 500);
+        },
+        onStateChange(e){
+          const s = e.data;
+          if(s===YT.PlayerState.PLAYING){ reelState[mid].playing=true; updatePlayIcon(mid,true); }
+          if(s===YT.PlayerState.PAUSED||s===YT.PlayerState.ENDED){ reelState[mid].playing=false; updatePlayIcon(mid,false); }
+        },
+        onError(){ hideLd(mid); showToast('Trailer unavailable'); }
+      }
+    });
+  });
+}
+
+function hideLd(mid){ document.getElementById('rld-'+mid)?.classList.remove('show'); document.getElementById('rpb-'+mid)?.classList.remove('hidden'); }
+
+/* ── CONTROLS ── */
+function showControls(mid){
+  const ctl = document.getElementById('rctl-'+mid);
+  if(ctl){ ctl.classList.add('visible'); scheduleHide(mid); }
+  // Wire tap-area to toggle controls
+  const ta = document.getElementById('rta-'+mid);
+  if(ta) ta.onclick = ()=>{ if(reelState[mid]?.playing!==undefined) reelToggleControlsVis(mid); };
+}
+
+function reelTogglePlay(mid){
+  const st = reelState[mid]; if(!st) return;
+  if(st.mode==='cobalt' && st.videoEl){
+    if(st.playing){ st.videoEl.pause(); st.playing=false; updatePlayIcon(mid,false); clearInterval(st.progressTimer); }
+    else { st.videoEl.play(); st.playing=true; updatePlayIcon(mid,true); startProgressTimer(mid); }
+  } else if(st.mode==='yt' && st.ytPlayer){
+    if(st.playing){ st.ytPlayer.pauseVideo(); }
+    else { st.ytPlayer.playVideo(); }
+  }
+  scheduleHide(mid);
+}
+
+function reelPause(mid){
+  const st = reelState[mid]; if(!st) return;
+  if(st.mode==='cobalt' && st.videoEl && st.playing){ st.videoEl.pause(); st.playing=false; updatePlayIcon(mid,false); clearInterval(st.progressTimer); }
+  if(st.mode==='yt' && st.ytPlayer){ try{ st.ytPlayer.pauseVideo(); }catch(e){} }
+}
+
+function reelSkip(mid, secs){
+  const st = reelState[mid]; if(!st) return;
+  if(st.mode==='cobalt' && st.videoEl){
+    st.videoEl.currentTime = Math.max(0, Math.min(st.videoEl.duration||0, st.videoEl.currentTime+secs));
+  } else if(st.mode==='yt' && st.ytPlayer){
+    try{ st.ytPlayer.seekTo(Math.max(0,(st.ytPlayer.getCurrentTime()||0)+secs), true); }catch(e){}
+  }
+  scheduleHide(mid);
+}
+
+function reelToggleMute(mid){
+  const st = reelState[mid]; if(!st) return;
+  st.muted = !st.muted;
+  if(st.mode==='cobalt' && st.videoEl) st.videoEl.muted = st.muted;
+  if(st.mode==='yt' && st.ytPlayer){ try{ st.muted ? st.ytPlayer.mute() : st.ytPlayer.unMute(); }catch(e){} }
+  // Update mute icon
+  const icon = document.getElementById('rvbi-'+mid);
+  if(icon) icon.innerHTML = st.muted
+    ? '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/>'
+    : '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>';
+  scheduleHide(mid);
+}
+
+function reelSeekDrag(mid, val){
+  // Live visual update while dragging
+  const st=reelState[mid]; if(!st||!st.duration) return;
+  const t=(val/100)*st.duration;
+  updateProgress(mid, t, st.duration);
+}
+function reelSeekCommit(mid, val){
+  const st=reelState[mid]; if(!st||!st.duration) return;
+  const t=(val/100)*st.duration;
+  if(st.mode==='cobalt'&&st.videoEl) st.videoEl.currentTime=t;
+  if(st.mode==='yt'&&st.ytPlayer){ try{ st.ytPlayer.seekTo(t,true); }catch(e){} }
+  scheduleHide(mid);
+}
+
+/* ── PROGRESS ── */
+function startProgressTimer(mid){
+  const st=reelState[mid]; if(!st||!st.videoEl) return;
+  clearInterval(st.progressTimer);
+  st.progressTimer = setInterval(()=>{
+    if(!st.videoEl) return;
+    const cur=st.videoEl.currentTime||0, dur=st.videoEl.duration||0;
+    st.currentTime=cur; st.duration=dur;
+    updateProgress(mid,cur,dur);
+  },400);
+}
+function updateProgress(mid,cur,dur){
+  const fill=document.getElementById('rpf-'+mid);
+  const range=document.querySelector(`#rpw-${mid} input[type=range]`);
+  const pct=dur?((cur/dur)*100):0;
+  if(fill) fill.style.width=pct+'%';
+  if(range) range.value=pct;
+  updateTimeDisplay(mid,cur,dur);
+}
+function updateTimeDisplay(mid,cur,dur){
+  const el=document.getElementById('rtm-'+mid);
+  if(!el) return;
+  const st=reelState[mid];
+  cur=cur??st?.currentTime??0; dur=dur??st?.duration??0;
+  el.textContent=`${fmtTime(cur)} / ${fmtTime(dur)}`;
+}
+function fmtTime(s){ const m=Math.floor(s/60); const sec=Math.floor(s%60); return `${m}:${sec.toString().padStart(2,'0')}` }
+
+/* ── PLAY ICON SWAP ── */
+function updatePlayIcon(mid, playing){
+  const ic=document.getElementById('rppi-'+mid); if(!ic) return;
+  ic.innerHTML = playing
+    ? '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>'  // pause
+    : '<polygon points="5,3 19,12 5,21"/>';  // play
+}
+
+/* ── GARBAGE COLLECT old players ── */
+function reelGarbageCollect(currentIdx){
+  // Destroy players more than 2 reels away
+  Object.keys(reelState).forEach(mid=>{
+    const reelIdx = reels.findIndex(r=>String(r.id)===String(mid));
+    if(Math.abs(reelIdx-currentIdx)>2){
+      const st=reelState[mid];
+      if(st.progressTimer) clearInterval(st.progressTimer);
+      if(st.videoEl){ st.videoEl.pause(); st.videoEl.src=''; }
+      if(st.ytPlayer){ try{ st.ytPlayer.destroy(); }catch(e){} }
+      const wrap=document.getElementById('rvw-'+mid);
+      if(wrap){ wrap.innerHTML=''; wrap.classList.remove('visible'); }
+      const pb=document.getElementById('rpb-'+mid);
+      if(pb) pb.classList.remove('hidden');
+      const ctl=document.getElementById('rctl-'+mid);
+      if(ctl) ctl.classList.remove('visible');
+      delete reelState[mid];
+    }
+  });
+}
+
 </script>
 </body>
 </html>
